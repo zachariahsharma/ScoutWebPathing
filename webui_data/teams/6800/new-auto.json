@@ -1,0 +1,147 @@
+{
+  "version": 3,
+  "storageId": "new-auto",
+  "team": "6800",
+  "name": "New Auto",
+  "fieldId": "rebuilt",
+  "createdAt": "2026-04-22T01:25:31.780Z",
+  "updatedAt": "2026-04-22T13:44:51.426019Z",
+  "points": [
+    {
+      "id": "marker_1776821147043000",
+      "position": {
+        "x": 7.274207864082829,
+        "y": 7.0841138937428845
+      },
+      "waypointRelativePos": 0.7785714285714286,
+      "timeSeconds": 1.16,
+      "note": ""
+    }
+  ],
+  "waypointTimings": [
+    {
+      "timeSeconds": 0,
+      "note": ""
+    },
+    {
+      "timeSeconds": 1.5,
+      "note": ""
+    }
+  ],
+  "path": {
+    "version": "2025.0",
+    "waypoints": [
+      {
+        "anchor": {
+          "x": 2.3861973328793606,
+          "y": 7.0568164940730735
+        },
+        "prevControl": null,
+        "nextControl": {
+          "x": 3.7788196211191423,
+          "y": 8.07
+        },
+        "isLocked": false,
+        "linkedName": null
+      },
+      {
+        "anchor": {
+          "x": 8.191015746643018,
+          "y": 6.178931828710075
+        },
+        "prevControl": {
+          "x": 7.325560476030931,
+          "y": 7.865372567434373
+        },
+        "nextControl": null,
+        "isLocked": false,
+        "linkedName": null
+      }
+    ],
+    "rotationTargets": [],
+    "constraintZones": [],
+    "pointTowardsZones": [],
+    "eventMarkers": [],
+    "globalConstraints": {
+      "maxVelocity": 3,
+      "maxAcceleration": 3,
+      "maxAngularVelocity": 540,
+      "maxAngularAcceleration": 720,
+      "nominalVoltage": 12,
+      "unlimited": false
+    },
+    "goalEndState": {
+      "velocity": 0,
+      "rotation": 0
+    },
+    "reversed": false,
+    "folder": null,
+    "idealStartingState": {
+      "velocity": 0,
+      "rotation": 0
+    },
+    "useDefaultConstraints": true
+  },
+  "canMirror": true,
+  "mirrorRotations": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "matches": [
+    {
+      "id": "match_1",
+      "label": "Match 1",
+      "waypointTimings": [
+        {
+          "timeSeconds": 0,
+          "note": ""
+        },
+        {
+          "timeSeconds": 1.5,
+          "note": ""
+        }
+      ],
+      "markerTimings": [
+        {
+          "markerId": "marker_1776821147043000",
+          "timeSeconds": 1.16
+        }
+      ],
+      "passToCenterTimes": [
+        1,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "id": "match_1776821386445000",
+      "label": "Match 2",
+      "waypointTimings": [
+        {
+          "timeSeconds": 0,
+          "note": ""
+        },
+        {
+          "timeSeconds": 1.5,
+          "note": ""
+        }
+      ],
+      "markerTimings": [
+        {
+          "markerId": "marker_1776821147043000",
+          "timeSeconds": 1.16
+        }
+      ],
+      "passToCenterTimes": [
+        2,
+        null,
+        null,
+        null
+      ]
+    }
+  ],
+  "selectedMatchId": "match_1776821386445000"
+}

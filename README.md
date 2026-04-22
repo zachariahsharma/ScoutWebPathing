@@ -53,3 +53,25 @@ https://3015rangerrobotics.github.io/pathplannerlib/PathplannerLib.json
     * macOS: `<PROJECT DIR>/build/macos/Build/Products/Release`
     * Linux: `<PROJECT DIR>/build/linux/x64/release/bundle`
 * OR `flutter run` to run in debug mode
+
+## Scouting Web UI
+This repo also includes a stripped-down web UI for charting observed autonomous routines from match footage. It focuses on:
+* Drawing timestamped path points on the field
+* Previewing the robot on the path
+* Organizing autos by server-side team folders
+* Browsing each team's saved autos
+* Exporting each auto as JSON
+
+### Run in development
+1. Start the backend server:
+   * `dart run bin/webui_server.dart --port=8080`
+2. Start the Flutter web UI in a second terminal:
+   * `flutter run -d chrome -t lib/main_web.dart --dart-define=PATHPLANNER_WEBUI_API=http://127.0.0.1:8080`
+
+Saved files will be written to `webui_data/teams/<team>/<auto>.json`.
+
+### Build for deployment
+1. Build the Flutter web bundle:
+   * `flutter build web --target lib/main_web.dart`
+2. Serve the bundle and API together:
+   * `dart run bin/webui_server.dart --port=8080 --web-dir=build/web`
