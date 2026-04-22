@@ -7,6 +7,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 class ObservedAutoExport {
+  static const int _infoPanelWidth = 700;
+
   static Future<Uint8List> renderJpeg(
     Map<String, dynamic> autoJson, {
     String? matchId,
@@ -20,8 +22,8 @@ class ObservedAutoExport {
       throw Exception('Failed to load field image: ${field.assetPath}');
     }
 
-    final canvasWidth = fieldImage.width + 560;
-    final canvasHeight = max(fieldImage.height, 1600);
+    final canvasWidth = fieldImage.width + _infoPanelWidth;
+    final canvasHeight = max(fieldImage.height, 1800);
     final canvas = img.Image(
       width: canvasWidth,
       height: canvasHeight,
@@ -90,6 +92,7 @@ class ObservedAutoExport {
     final gold = img.ColorRgb8(212, 164, 55);
     final glow = img.ColorRgb8(244, 211, 122);
     final black = img.ColorRgb8(8, 8, 8);
+    final occupiedTags = <_LabelRect>[];
 
     for (int i = 0; i < positions.length - 1; i++) {
       final start = _toCanvas(field, positions[i]);
@@ -132,12 +135,13 @@ class ObservedAutoExport {
       }
 
       if (i < view.waypointTimings.length) {
-        _drawTag(
+        _drawAnchoredTag(
           canvas,
-          x: center.dx.round() + 18,
-          y: center.dy.round() - 36,
+          anchorX: center.dx.round(),
+          anchorY: center.dy.round(),
           text:
               '${_waypointName(i, view.waypointAnchors.length)}  ${view.waypointTimings[i].toStringAsFixed(2)}s',
+          occupied: occupiedTags,
           large: true,
         );
       }
@@ -183,11 +187,12 @@ class ObservedAutoExport {
         thickness: 3,
       );
 
-      _drawTag(
+      _drawAnchoredTag(
         canvas,
-        x: center.dx.round() + 18,
-        y: center.dy.round() + 10,
+        anchorX: center.dx.round(),
+        anchorY: center.dy.round(),
         text: '${marker.label}  ${marker.timeSeconds.toStringAsFixed(2)}s',
+        occupied: occupiedTags,
         large: true,
       );
     }
@@ -224,22 +229,22 @@ class ObservedAutoExport {
 
     int y = 60;
     y = _drawText(canvas, panelX + 24, y, view.name, size: 48, accent: true);
-    y = _drawText(canvas, panelX + 24, y + 10, view.matchLabel, size: 30);
+    y = _drawText(canvas, panelX + 24, y + 12, view.matchLabel, size: 36);
     y = _drawText(
       canvas,
       panelX + 24,
-      y + 18,
+      y + 20,
       'Mirror: ${view.canMirror ? 'Yes' : 'No'}',
-      size: 24,
+      size: 28,
     );
     y = _drawText(
       canvas,
       panelX + 24,
-      y + 6,
+      y + 10,
       'Rotations: ${view.mirrorRotations.isEmpty ? 'None' : view.mirrorRotations.map((value) => '$value°').join(', ')}',
-      size: 24,
+      size: 28,
     );
-    y = _drawText(canvas, panelX + 24, y + 24, 'Pass To Center', size: 28);
+    y = _drawText(canvas, panelX + 24, y + 28, 'Pass To Center', size: 34);
 
     final trends = _buildPassTrends(view.allMatchPassTimes);
     for (int i = 0; i < 4; i++) {
@@ -249,15 +254,15 @@ class ObservedAutoExport {
       y = _drawText(
         canvas,
         panelX + 36,
-        y + 10,
+        y + 12,
         '${_passName(i)}: ${value == null ? 'n/a' : '${value.toStringAsFixed(2)}s'}'
         '  avg ${average == null ? 'n/a' : '${average.toStringAsFixed(2)}s'}'
         '  trend $trend',
-        size: 22,
+        size: 28,
       );
     }
 
-    y = _drawText(canvas, panelX + 24, y + 28, 'Path Timings', size: 28);
+    y = _drawText(canvas, panelX + 24, y + 32, 'Path Timings', size: 34);
     for (int i = 0; i < view.waypointTimings.length; i++) {
       final label = i == 0
           ? 'Start'
@@ -267,21 +272,21 @@ class ObservedAutoExport {
       y = _drawText(
         canvas,
         panelX + 36,
-        y + 10,
+        y + 12,
         '$label • ${view.waypointTimings[i].toStringAsFixed(2)}s',
-        size: 22,
+        size: 28,
       );
     }
 
     if (view.markers.isNotEmpty) {
-      y = _drawText(canvas, panelX + 24, y + 28, 'Path Markers', size: 28);
+      y = _drawText(canvas, panelX + 24, y + 32, 'Path Markers', size: 34);
       for (final marker in view.markers) {
         y = _drawText(
           canvas,
           panelX + 36,
-          y + 10,
+          y + 12,
           '${marker.label} • ${marker.timeSeconds.toStringAsFixed(2)}s',
-          size: 22,
+          size: 28,
         );
       }
     }
@@ -297,7 +302,7 @@ class ObservedAutoExport {
   }) {
     final font = size >= 44
         ? img.arial48
-        : size >= 28
+        : size >= 22
             ? img.arial24
             : img.arial14;
     img.drawString(
@@ -319,10 +324,10 @@ class ObservedAutoExport {
     required String text,
     bool large = false,
   }) {
-    final font = large ? img.arial24 : img.arial14;
+    final font = large ? img.arial48 : img.arial14;
     final paddingX = large ? 16 : 8;
     final paddingY = large ? 10 : 6;
-    final width = max(96, text.length * (large ? 22 : 14));
+    final width = max(96, text.length * (large ? 28 : 14));
     final height = font.lineHeight + (paddingY * 2);
     img.fillRect(
       canvas,
@@ -340,6 +345,116 @@ class ObservedAutoExport {
       y: y,
       font: font,
       color: img.ColorRgb8(255, 255, 255),
+    );
+  }
+
+  static void _drawAnchoredTag(
+    img.Image canvas, {
+    required int anchorX,
+    required int anchorY,
+    required String text,
+    required List<_LabelRect> occupied,
+    bool large = false,
+  }) {
+    final font = large ? img.arial48 : img.arial14;
+    final paddingX = large ? 16 : 8;
+    final paddingY = large ? 10 : 6;
+    final width = max(96, text.length * (large ? 28 : 14));
+    final height = font.lineHeight + (paddingY * 2);
+    final candidates = [
+      ((anchorX + 28).toDouble(), (anchorY - height - 24).toDouble()),
+      ((anchorX + 28).toDouble(), (anchorY + 18).toDouble()),
+      ((anchorX - width - 28).toDouble(), (anchorY - height - 24).toDouble()),
+      ((anchorX - width - 28).toDouble(), (anchorY + 18).toDouble()),
+      ((anchorX + 48).toDouble(), (anchorY - (height ~/ 2)).toDouble()),
+      ((anchorX - width - 48).toDouble(), (anchorY - (height ~/ 2)).toDouble()),
+      ((anchorX - (width ~/ 2)).toDouble(), (anchorY - height - 34).toDouble()),
+      ((anchorX - (width ~/ 2)).toDouble(), (anchorY + 26).toDouble()),
+    ];
+
+    _LabelRect chosen = _clampLabelRect(
+      _LabelRect(
+        x1: candidates.first.$1 - paddingX,
+        y1: candidates.first.$2 - paddingY,
+        x2: candidates.first.$1 + width,
+        y2: candidates.first.$2 + height,
+      ),
+      canvas,
+    );
+    var bestScore = double.infinity;
+
+    for (final candidate in candidates) {
+      final rect = _clampLabelRect(
+        _LabelRect(
+          x1: candidate.$1 - paddingX,
+          y1: candidate.$2 - paddingY,
+          x2: candidate.$1 + width,
+          y2: candidate.$2 + height,
+        ),
+        canvas,
+      );
+      final overlaps =
+          occupied.where((other) => rect.overlaps(other)).length.toDouble();
+      final centerX = (rect.x1 + rect.x2) / 2.0;
+      final centerY = (rect.y1 + rect.y2) / 2.0;
+      final distance = pow(centerX - anchorX, 2) + pow(centerY - anchorY, 2);
+      final score = (overlaps * 1000000) + distance;
+      if (score < bestScore) {
+        bestScore = score;
+        chosen = rect;
+      }
+    }
+
+    occupied.add(chosen);
+
+    final tagTextX = chosen.x1 + paddingX;
+    final tagTextY = chosen.y1 + paddingY;
+    _drawTag(
+      canvas,
+      x: tagTextX.round(),
+      y: tagTextY.round(),
+      text: text,
+      large: large,
+    );
+
+    final labelAnchor = _closestPointOnRect(
+      chosen,
+      anchorX.toDouble(),
+      anchorY.toDouble(),
+    );
+    img.drawLine(
+      canvas,
+      x1: anchorX,
+      y1: anchorY,
+      x2: labelAnchor.dx.round(),
+      y2: labelAnchor.dy.round(),
+      color: img.ColorRgb8(255, 255, 255),
+      thickness: large ? 3 : 2,
+    );
+  }
+
+  static _LabelRect _clampLabelRect(_LabelRect rect, img.Image canvas) {
+    final dx = rect.x1 < 12
+        ? 12 - rect.x1
+        : rect.x2 > canvas.width - 12
+            ? (canvas.width - 12) - rect.x2
+            : 0.0;
+    final dy = rect.y1 < 12
+        ? 12 - rect.y1
+        : rect.y2 > canvas.height - 12
+            ? (canvas.height - 12) - rect.y2
+            : 0.0;
+    return rect.shift(dx, dy);
+  }
+
+  static _PixelPoint _closestPointOnRect(
+    _LabelRect rect,
+    double x,
+    double y,
+  ) {
+    return _PixelPoint(
+      x.clamp(rect.x1, rect.x2).toDouble(),
+      y.clamp(rect.y1, rect.y2).toDouble(),
     );
   }
 
@@ -711,6 +826,33 @@ class _PixelPoint {
   final double dy;
 
   const _PixelPoint(this.dx, this.dy);
+}
+
+class _LabelRect {
+  final double x1;
+  final double y1;
+  final double x2;
+  final double y2;
+
+  const _LabelRect({
+    required this.x1,
+    required this.y1,
+    required this.x2,
+    required this.y2,
+  });
+
+  bool overlaps(_LabelRect other) {
+    return x1 < other.x2 && x2 > other.x1 && y1 < other.y2 && y2 > other.y1;
+  }
+
+  _LabelRect shift(double dx, double dy) {
+    return _LabelRect(
+      x1: x1 + dx,
+      y1: y1 + dy,
+      x2: x2 + dx,
+      y2: y2 + dy,
+    );
+  }
 }
 
 class _ServerFieldSpec {

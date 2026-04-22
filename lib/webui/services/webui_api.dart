@@ -16,7 +16,11 @@ class WebUiApi {
     if (envUrl.isNotEmpty) {
       return envUrl.replaceAll(RegExp(r'/$'), '');
     }
-    return Uri.base.origin;
+    final base = Uri.base;
+    if (base.scheme == 'http' || base.scheme == 'https') {
+      return base.origin;
+    }
+    return 'http://127.0.0.1:8080';
   }
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');

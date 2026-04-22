@@ -8,7 +8,6 @@ import 'package:path/path.dart';
 import 'package:pathplanner/commands/command.dart';
 import 'package:pathplanner/commands/command_groups.dart';
 import 'package:pathplanner/commands/named_command.dart';
-import 'package:pathplanner/pages/project/project_page.dart';
 import 'package:pathplanner/path/constraints_zone.dart';
 import 'package:pathplanner/path/event_marker.dart';
 import 'package:pathplanner/path/goal_end_state.dart';
@@ -18,7 +17,6 @@ import 'package:pathplanner/path/ideal_starting_state.dart';
 import 'package:pathplanner/path/point_towards_zone.dart';
 import 'package:pathplanner/path/rotation_target.dart';
 import 'package:pathplanner/path/waypoint.dart';
-import 'package:pathplanner/services/log.dart';
 import 'package:pathplanner/util/geometry_util.dart';
 import 'package:pathplanner/util/wpimath/geometry.dart';
 import 'package:pathplanner/util/wpimath/math_util.dart';
@@ -174,7 +172,7 @@ class PathPlannerPath {
       pathFile.writeAsString(encoder.convert(this));
       lastModified = DateTime.now().toUtc();
     } catch (ex, stack) {
-      Log.error('Failed to save path: $name', ex, stack);
+      debugPrint('Failed to save path $name: $ex\n$stack');
     }
   }
 
@@ -201,7 +199,7 @@ class PathPlannerPath {
 
           paths.add(path);
         } catch (ex, stack) {
-          Log.error('Failed to load path', ex, stack);
+          debugPrint('Failed to load path ${e.path}: $ex\n$stack');
         }
       }
     }
@@ -337,21 +335,6 @@ class PathPlannerPath {
     return pos;
   }
 
-  void _addNamedCommandsToEvents(Command command) {
-    if (command is NamedCommand) {
-      if (command.name != null) {
-        ProjectPage.events.add(command.name!);
-        return;
-      }
-    }
-
-    if (command is CommandGroup) {
-      for (Command cmd in command.commands) {
-        _addNamedCommandsToEvents(cmd);
-      }
-    }
-  }
-
   bool hasEmptyNamedCommand() {
     for (EventMarker m in eventMarkers) {
       if (m.command == null) {
@@ -414,16 +397,6 @@ class PathPlannerPath {
   }
 
   void generatePathPoints() {
-    // Add all event names in this path to the available names
-    for (EventMarker m in eventMarkers) {
-      if (m.name.isNotEmpty) {
-        ProjectPage.events.add(m.name);
-      }
-      if (m.command != null) {
-        _addNamedCommandsToEvents(m.command!);
-      }
-    }
-
     pathPoints.clear();
 
     final unaddedTargets = rotationTargets.sorted(

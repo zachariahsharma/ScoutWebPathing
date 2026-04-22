@@ -5,8 +5,20 @@
   "name": "New Auto",
   "fieldId": "rebuilt",
   "createdAt": "2026-04-22T14:25:52.320Z",
-  "updatedAt": "2026-04-22T14:35:16.885588Z",
+  "updatedAt": "2026-04-22T19:44:09.509475Z",
   "points": [
+    {
+      "id": "marker_1776873331090000",
+      "position": {
+        "x": 5.5913816545499575,
+        "y": 7.281875572856272
+      },
+      "waypointRelativePos": 0.30000000000000004,
+      "timeSeconds": 0.3,
+      "note": "",
+      "isToCenter": true,
+      "passNumber": 2
+    },
     {
       "id": "marker_1776867975612000",
       "position": {
@@ -16,14 +28,14 @@
       "waypointRelativePos": 0.5285714285714286,
       "timeSeconds": 0.8,
       "note": "",
-      "isToCenter": false,
+      "isToCenter": true,
       "passNumber": 1
     },
     {
       "id": "marker_1776868480589000",
       "position": {
-        "x": 7.271176016739368,
-        "y": 6.914793180195307
+        "x": 7.320445655511357,
+        "y": 7.611446329170829
       },
       "waypointRelativePos": 2.8285714285714283,
       "timeSeconds": 2.33,
@@ -38,15 +50,15 @@
       "note": ""
     },
     {
-      "timeSeconds": 0.75,
+      "timeSeconds": 1,
       "note": ""
     },
     {
-      "timeSeconds": 1.5,
+      "timeSeconds": 2,
       "note": ""
     },
     {
-      "timeSeconds": 2.5,
+      "timeSeconds": 3,
       "note": ""
     }
   ],
@@ -100,12 +112,12 @@
       },
       {
         "anchor": {
-          "x": 8.418131006810988,
-          "y": 6.443579146357188
+          "x": 8.47157386263989,
+          "y": 7.1992399291721165
         },
         "prevControl": {
-          "x": 6.843701777227482,
-          "y": 7.67700575879114
+          "x": 6.897144633056383,
+          "y": 8.43266654160606
         },
         "nextControl": null,
         "isLocked": false,
@@ -136,7 +148,7 @@
     },
     "useDefaultConstraints": true
   },
-  "canMirror": false,
+  "canMirror": true,
   "mirrorRotations": [],
   "matches": [
     {
@@ -163,6 +175,12 @@
       ],
       "markerTimings": [
         {
+          "markerId": "marker_1776873331090000",
+          "timeSeconds": 0.3,
+          "isToCenter": true,
+          "passNumber": 2
+        },
+        {
           "markerId": "marker_1776867975612000",
           "timeSeconds": 0.8,
           "isToCenter": false,
@@ -177,7 +195,7 @@
       ],
       "passToCenterTimes": [
         null,
-        2.33,
+        0.3,
         null,
         null
       ]
@@ -206,6 +224,12 @@
       ],
       "markerTimings": [
         {
+          "markerId": "marker_1776873331090000",
+          "timeSeconds": 0.3,
+          "isToCenter": true,
+          "passNumber": 2
+        },
+        {
           "markerId": "marker_1776867975612000",
           "timeSeconds": 0.8,
           "isToCenter": true,
@@ -220,7 +244,7 @@
       ],
       "passToCenterTimes": [
         0.8,
-        2.33,
+        0.3,
         null,
         null
       ]
