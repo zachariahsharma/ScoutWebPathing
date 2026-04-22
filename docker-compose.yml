@@ -1,0 +1,10 @@
+services:
+  scoutwebpathing:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./webui_data:/app/webui_data
+    restart: unless-stopped
