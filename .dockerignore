@@ -1,0 +1,10 @@
+.dart_tool
+.flutter-plugins
+.flutter-plugins-dependencies
+.git
+.github
+.idea
+.vscode
+build
+flutter_01.log
+webui_data
