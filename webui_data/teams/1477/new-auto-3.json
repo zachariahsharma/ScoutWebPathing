@@ -1,0 +1,205 @@
+{
+  "version": 3,
+  "storageId": "new-auto-3",
+  "team": "1477",
+  "name": "New Auto",
+  "fieldId": "rebuilt",
+  "createdAt": "2026-04-23T02:01:28.321Z",
+  "updatedAt": "2026-04-25T02:09:55.364034Z",
+  "points": [
+    {
+      "id": "marker_1777077755406000",
+      "position": {
+        "x": 7.077992495955273,
+        "y": 6.986579684403368
+      },
+      "waypointRelativePos": 0.5892857142857143,
+      "timeSeconds": 0.57,
+      "note": "",
+      "isToCenter": false,
+      "passNumber": null
+    },
+    {
+      "id": "marker_1777079851828000",
+      "position": {
+        "x": 4.9489262053216265,
+        "y": 7.48246284534773
+      },
+      "waypointRelativePos": 0.1607142857142857,
+      "timeSeconds": 1,
+      "note": "",
+      "isToCenter": false,
+      "passNumber": null
+    },
+    {
+      "id": "marker_1777079834847000",
+      "position": {
+        "x": 6.9985275312518995,
+        "y": 7.014594775916995
+      },
+      "waypointRelativePos": 0.5732142857142857,
+      "timeSeconds": 10,
+      "note": "",
+      "isToCenter": true,
+      "passNumber": 1
+    }
+  ],
+  "waypointTimings": [
+    {
+      "timeSeconds": 0,
+      "note": ""
+    },
+    {
+      "timeSeconds": 1,
+      "note": ""
+    },
+    {
+      "timeSeconds": 2,
+      "note": ""
+    },
+    {
+      "timeSeconds": 3,
+      "note": ""
+    }
+  ],
+  "path": {
+    "version": "2025.0",
+    "waypoints": [
+      {
+        "anchor": {
+          "x": 4.447894677829272,
+          "y": 7.519132904769023
+        },
+        "prevControl": null,
+        "nextControl": {
+          "x": 5.142822918223949,
+          "y": 7.536082374046942
+        },
+        "isLocked": false,
+        "linkedName": null
+      },
+      {
+        "anchor": {
+          "x": 8.278474734638959,
+          "y": 6.061478546867992
+        },
+        "prevControl": {
+          "x": 8.278474734638959,
+          "y": 6.959800418597698
+        },
+        "nextControl": {
+          "x": 8.278474734638959,
+          "y": 4.023790099114127
+        },
+        "isLocked": false,
+        "linkedName": null
+      },
+      {
+        "anchor": {
+          "x": 9.416994742990653,
+          "y": 2.60531277380257
+        },
+        "prevControl": {
+          "x": 9.0167547058569,
+          "y": 1.3571463115693412
+        },
+        "nextControl": {
+          "x": 9.817234780124405,
+          "y": 3.853479236035799
+        },
+        "isLocked": false,
+        "linkedName": null
+      },
+      {
+        "anchor": {
+          "x": 1.95342173292922,
+          "y": 6.447629702264218
+        },
+        "prevControl": {
+          "x": 1.8095095523138536,
+          "y": 6.867743891324758
+        },
+        "nextControl": null,
+        "isLocked": false,
+        "linkedName": null
+      }
+    ],
+    "rotationTargets": [],
+    "constraintZones": [],
+    "pointTowardsZones": [],
+    "eventMarkers": [],
+    "globalConstraints": {
+      "maxVelocity": 3,
+      "maxAcceleration": 3,
+      "maxAngularVelocity": 540,
+      "maxAngularAcceleration": 720,
+      "nominalVoltage": 12,
+      "unlimited": false
+    },
+    "goalEndState": {
+      "velocity": 0,
+      "rotation": 0
+    },
+    "reversed": false,
+    "folder": null,
+    "idealStartingState": {
+      "velocity": 0,
+      "rotation": 0
+    },
+    "useDefaultConstraints": true
+  },
+  "canMirror": false,
+  "mirrorRotations": [],
+  "matches": [
+    {
+      "id": "match_1776910201356000",
+      "matchNumber": "Match 2",
+      "label": "Match 15",
+      "waypointTimings": [
+        {
+          "timeSeconds": 0,
+          "note": ""
+        },
+        {
+          "timeSeconds": 1,
+          "note": ""
+        },
+        {
+          "timeSeconds": 2,
+          "note": ""
+        },
+        {
+          "timeSeconds": 3,
+          "note": ""
+        }
+      ],
+      "markerTimings": [
+        {
+          "markerId": "marker_1777077755406000",
+          "timeSeconds": 0.57,
+          "isToCenter": false,
+          "passNumber": null
+        },
+        {
+          "markerId": "marker_1777079851828000",
+          "timeSeconds": 1,
+          "isToCenter": false,
+          "passNumber": null
+        },
+        {
+          "markerId": "marker_1777079834847000",
+          "timeSeconds": 10,
+          "isToCenter": true,
+          "passNumber": 1
+        }
+      ],
+      "passToCenterTimes": [
+        10,
+        null,
+        null,
+        null
+      ]
+    }
+  ],
+  "selectedMatchId": "match_1776910201356000"
+}
