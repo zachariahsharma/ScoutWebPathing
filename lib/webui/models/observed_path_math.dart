@@ -12,7 +12,11 @@ class ObservedPoseSample {
 
 class ObservedPathMath {
   static List<ObservedAutoPoint> _sortedPoints(ObservedAuto auto) {
-    return auto.sorted().points;
+    return auto
+        .sorted()
+        .points
+        .where((point) => point.timeSeconds != null)
+        .toList();
   }
 
   static Translation2d samplePosition(ObservedAuto auto, double timeSeconds) {
@@ -24,20 +28,21 @@ class ObservedPathMath {
       return points.first.position;
     }
 
-    if (timeSeconds <= points.first.timeSeconds) {
+    if (timeSeconds <= points.first.timeSeconds!) {
       return points.first.position;
     }
-    if (timeSeconds >= points.last.timeSeconds) {
+    if (timeSeconds >= points.last.timeSeconds!) {
       return points.last.position;
     }
 
     for (int i = 0; i < points.length - 1; i++) {
       final start = points[i];
       final end = points[i + 1];
-      if (timeSeconds >= start.timeSeconds && timeSeconds <= end.timeSeconds) {
-        final duration = end.timeSeconds - start.timeSeconds;
+      if (timeSeconds >= start.timeSeconds! &&
+          timeSeconds <= end.timeSeconds!) {
+        final duration = end.timeSeconds! - start.timeSeconds!;
         final t =
-            duration <= 0 ? 0.0 : (timeSeconds - start.timeSeconds) / duration;
+            duration <= 0 ? 0.0 : (timeSeconds - start.timeSeconds!) / duration;
         final p0 = i == 0 ? start.position : points[i - 1].position;
         final p1 = start.position;
         final p2 = end.position;
@@ -61,8 +66,8 @@ class ObservedPathMath {
           position: position, heading: const Rotation2d());
     }
 
-    final minTime = points.first.timeSeconds;
-    final maxTime = points.last.timeSeconds;
+    final minTime = points.first.timeSeconds!;
+    final maxTime = points.last.timeSeconds!;
     final beforeTime = max(minTime, timeSeconds - 0.05);
     final afterTime = min(maxTime, timeSeconds + 0.05);
 
@@ -89,11 +94,11 @@ class ObservedPathMath {
     for (int i = 0; i < points.length - 1; i++) {
       final start = points[i];
       final end = points[i + 1];
-      final duration = end.timeSeconds - start.timeSeconds;
+      final duration = end.timeSeconds! - start.timeSeconds!;
       final sampleCount = duration <= 0 ? 2 : samplesPerSegment;
       for (int step = 0; step < sampleCount; step++) {
         final t = step / sampleCount;
-        final sampleTime = start.timeSeconds + (duration * t);
+        final sampleTime = start.timeSeconds! + (duration * t);
         samples.add(samplePosition(auto, sampleTime));
       }
     }

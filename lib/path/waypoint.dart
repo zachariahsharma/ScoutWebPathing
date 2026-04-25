@@ -58,9 +58,15 @@ class Waypoint {
     };
   }
 
-  Rotation2d get heading => (nextControl != null)
-      ? (nextControl! - anchor).angle
-      : (anchor - prevControl!).angle;
+  Rotation2d get heading {
+    if (nextControl != null) {
+      return (nextControl! - anchor).angle;
+    }
+    if (prevControl != null) {
+      return (anchor - prevControl!).angle;
+    }
+    return const Rotation2d();
+  }
 
   bool get isStartPoint => prevControl == null;
 

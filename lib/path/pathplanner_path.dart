@@ -258,11 +258,15 @@ class PathPlannerPath {
   }
 
   void addWaypoint(Translation2d anchorPos) {
-    waypoints[waypoints.length - 1].addNextControl();
+    final previousEnd = waypoints[waypoints.length - 1];
+    if (previousEnd.prevControl != null) {
+      previousEnd.addNextControl();
+    }
+    previousEnd.nextControl ??=
+        previousEnd.anchor.interpolate(anchorPos, 1 / 3);
     waypoints.add(
       Waypoint(
-        prevControl:
-            (waypoints[waypoints.length - 1].nextControl! + anchorPos) * 0.5,
+        prevControl: (previousEnd.nextControl! + anchorPos) * 0.5,
         anchor: anchorPos,
       ),
     );
@@ -275,12 +279,14 @@ class PathPlannerPath {
 
     Waypoint before = waypoints[waypointIdx];
     Waypoint after = waypoints[waypointIdx + 1];
-    Translation2d anchorPos = GeometryUtil.cubicLerp(before.anchor,
-        before.nextControl!, after.prevControl!, after.anchor, 0.5);
+    final beforeNextControl = _nextControlForSegment(before, after);
+    final afterPrevControl = _prevControlForSegment(before, after);
+    Translation2d anchorPos = GeometryUtil.cubicLerp(
+        before.anchor, beforeNextControl, afterPrevControl, after.anchor, 0.5);
 
     Waypoint toAdd = Waypoint(
       anchor: anchorPos,
-      prevControl: (anchorPos + before.nextControl!) * 0.5,
+      prevControl: (anchorPos + beforeNextControl) * 0.5,
     );
     toAdd.addNextControl();
 
@@ -663,13 +669,23 @@ class PathPlannerPath {
     }
 
     num t = pos - i;
+    final start = waypoints[i];
+    final end = waypoints[i + 1];
 
     return GeometryUtil.cubicLerp(
-        waypoints[i].anchor,
-        waypoints[i].nextControl!,
-        waypoints[i + 1].prevControl!,
-        waypoints[i + 1].anchor,
+        start.anchor,
+        _nextControlForSegment(start, end),
+        _prevControlForSegment(start, end),
+        end.anchor,
         t);
+  }
+
+  static Translation2d _nextControlForSegment(Waypoint start, Waypoint end) {
+    return start.nextControl ?? start.anchor.interpolate(end.anchor, 1 / 3);
+  }
+
+  static Translation2d _prevControlForSegment(Waypoint start, Waypoint end) {
+    return end.prevControl ?? end.anchor.interpolate(start.anchor, 1 / 3);
   }
 
   num _getCurveRadiusAtPoint(int index) {

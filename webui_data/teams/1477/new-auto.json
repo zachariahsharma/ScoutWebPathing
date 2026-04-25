@@ -3,6 +3,7 @@
   "storageId": "new-auto",
   "team": "1477",
   "name": "New Auto",
+  "autoType": "middle",
   "fieldId": "rebuilt",
   "createdAt": "2026-04-22T14:25:52.320Z",
   "updatedAt": "2026-04-22T23:46:33.885782Z",
@@ -62,15 +63,7 @@
       "note": ""
     },
     {
-      "timeSeconds": 1,
-      "note": ""
-    },
-    {
-      "timeSeconds": 2,
-      "note": ""
-    },
-    {
-      "timeSeconds": 3,
+      "timeSeconds": 0.75,
       "note": ""
     }
   ],
@@ -131,6 +124,7 @@
           "x": 7.224246694297529,
           "y": 8.401981055160686
         },
+        "prevControl": null,
         "nextControl": null,
         "isLocked": false,
         "linkedName": null
@@ -175,32 +169,27 @@
         {
           "timeSeconds": 0.75,
           "note": ""
-        },
-        {
-          "timeSeconds": 1.5,
-          "note": ""
-        },
-        {
-          "timeSeconds": 2.5,
-          "note": ""
         }
       ],
       "markerTimings": [
         {
           "markerId": "marker_1776873331090000",
           "timeSeconds": 0.3,
+          "name": "",
           "isToCenter": true,
           "passNumber": 2
         },
         {
           "markerId": "marker_1776867975612000",
           "timeSeconds": 0.8,
+          "name": "",
           "isToCenter": false,
           "passNumber": 1
         },
         {
           "markerId": "marker_1776868480589000",
           "timeSeconds": 2.33,
+          "name": "",
           "isToCenter": true,
           "passNumber": 2
         },
@@ -228,14 +217,6 @@
           "note": ""
         },
         {
-          "timeSeconds": 1,
-          "note": ""
-        },
-        {
-          "timeSeconds": 2,
-          "note": ""
-        },
-        {
           "timeSeconds": 3,
           "note": ""
         }
@@ -244,18 +225,21 @@
         {
           "markerId": "marker_1776873331090000",
           "timeSeconds": 0.3,
+          "name": "",
           "isToCenter": true,
           "passNumber": 2
         },
         {
           "markerId": "marker_1776867975612000",
           "timeSeconds": 0.8,
+          "name": "",
           "isToCenter": true,
           "passNumber": 1
         },
         {
           "markerId": "marker_1776868480589000",
           "timeSeconds": 2.33,
+          "name": "",
           "isToCenter": true,
           "passNumber": 2
         },

@@ -19,8 +19,7 @@ class ObservedAutoConverter {
       );
     }
 
-    final sortedPoints = [...auto.points]
-      ..sort((a, b) => a.timeSeconds.compareTo(b.timeSeconds));
+    final sortedPoints = [...auto.points]..sort(_comparePointTimes);
 
     if (sortedPoints.length < 2) {
       return PathPlannerPath.defaultPath(
@@ -52,9 +51,7 @@ class ObservedAutoConverter {
     final existing = auto.waypointTimings.isNotEmpty
         ? auto.waypointTimings
         : [
-            for (final point in [
-              ...auto.points
-            ]..sort((a, b) => a.timeSeconds.compareTo(b.timeSeconds)))
+            for (final point in [...auto.points]..sort(_comparePointTimes))
               ObservedWaypointTiming(
                 timeSeconds: point.timeSeconds,
                 note: point.note,
@@ -65,14 +62,8 @@ class ObservedAutoConverter {
     for (int i = 0; i < waypointCount; i++) {
       if (i < existing.length) {
         timings.add(existing[i]);
-      } else if (timings.isEmpty) {
-        timings.add(const ObservedWaypointTiming(timeSeconds: 0));
       } else {
-        timings.add(
-          ObservedWaypointTiming(
-            timeSeconds: timings.last.timeSeconds + 1,
-          ),
-        );
+        timings.add(const ObservedWaypointTiming());
       }
     }
 
@@ -134,7 +125,7 @@ class ObservedAutoConverter {
         position: path.samplePath(clampedPos),
       );
     }).toList()
-      ..sort((a, b) => a.timeSeconds.compareTo(b.timeSeconds));
+      ..sort(_comparePointTimes);
   }
 
   static List<Waypoint> _waypointsFromObservedPoints(
@@ -181,5 +172,13 @@ class ObservedAutoConverter {
     }
 
     return bestPos;
+  }
+
+  static int _comparePointTimes(ObservedAutoPoint a, ObservedAutoPoint b) {
+    return _sortTime(a.timeSeconds).compareTo(_sortTime(b.timeSeconds));
+  }
+
+  static double _sortTime(double? timeSeconds) {
+    return timeSeconds ?? double.infinity;
   }
 }

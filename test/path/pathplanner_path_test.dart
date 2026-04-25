@@ -73,6 +73,33 @@ void main() {
       expect(path.pathPoints.isNotEmpty, true);
     });
 
+    test('samples linear segment when controls are null', () {
+      final fs = MemoryFileSystem();
+
+      final path = PathPlannerPath(
+        name: 'test',
+        pathDir: '/paths',
+        fs: fs,
+        waypoints: [
+          Waypoint(anchor: const Translation2d(1.0, 1.0)),
+          Waypoint(anchor: const Translation2d(4.0, 1.0)),
+        ],
+        globalConstraints: PathConstraints(),
+        goalEndState: GoalEndState(0.0, const Rotation2d()),
+        constraintZones: [],
+        pointTowardsZones: [],
+        rotationTargets: [],
+        eventMarkers: [],
+        reversed: false,
+        folder: null,
+        idealStartingState: IdealStartingState(0.0, const Rotation2d()),
+        useDefaultConstraints: false,
+      );
+
+      expect(path.pathPoints.isNotEmpty, true);
+      expect(path.samplePath(0.5), const Translation2d(2.5, 1.0));
+    });
+
     test('toJson/fromJson interoperability', () {
       var fs = MemoryFileSystem();
 

@@ -139,8 +139,7 @@ Future<void> _handleApiRequest(
       if (p.extension(file.path) != '.json') {
         continue;
       }
-      final json =
-          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final json = await _readJsonFile(file);
       autos.add(json);
     }
 
@@ -168,11 +167,11 @@ Future<void> _handleApiRequest(
           .whereType<File>()
           .where((file) => p.extension(file.path) == '.json')
           .map((file) {
-        final json =
-            jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+        final json = _decodeJsonObject(file.readAsStringSync(), 'auto file');
         return {
           'id': p.basenameWithoutExtension(file.path),
           'name': json['name'] ?? p.basenameWithoutExtension(file.path),
+          'autoType': _normalizedAutoType(json['autoType'] as String?),
           'updatedAt': json['updatedAt'] ?? '',
           'fieldId': json['fieldId'] ?? 'rebuilt',
           'points': json['points'] ?? const [],
@@ -216,8 +215,7 @@ Future<void> _handleApiRequest(
         if (!file.existsSync()) {
           throw const _HttpException(HttpStatus.notFound, 'Auto not found.');
         }
-        final json =
-            jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+        final json = await _readJsonFile(file);
         await _writeJson(request.response, {'auto': json});
         return;
       }
@@ -225,8 +223,7 @@ Future<void> _handleApiRequest(
       if (segments.length == 4 && request.method == 'PUT') {
         final auto = await _readJson(request);
         final existingCreatedAt = file.existsSync()
-            ? (jsonDecode(await file.readAsString())
-                as Map<String, dynamic>)['createdAt'] as String?
+            ? (await _readJsonFile(file))['createdAt'] as String?
             : null;
         final saved = _normalizedAuto(
           auto,
@@ -236,6 +233,15 @@ Future<void> _handleApiRequest(
         );
         await file.writeAsString(_prettyJson(saved));
         await _writeJson(request.response, {'auto': saved});
+        return;
+      }
+
+      if (segments.length == 4 && request.method == 'DELETE') {
+        if (!file.existsSync()) {
+          throw const _HttpException(HttpStatus.notFound, 'Auto not found.');
+        }
+        await file.delete();
+        await _writeJson(request.response, {'deleted': true});
         return;
       }
 
@@ -265,8 +271,7 @@ Future<void> _handleApiRequest(
         if (!file.existsSync()) {
           throw const _HttpException(HttpStatus.notFound, 'Auto not found.');
         }
-        final json =
-            jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+        final json = await _readJsonFile(file);
         final jpegBytes = await ObservedAutoExport.renderJpeg(
           json,
           matchId: request.uri.queryParameters['match'],
@@ -291,7 +296,33 @@ Future<Map<String, dynamic>> _readJson(HttpRequest request) async {
   if (body.trim().isEmpty) {
     return <String, dynamic>{};
   }
-  return jsonDecode(body) as Map<String, dynamic>;
+  return _decodeJsonObject(body, 'request body');
+}
+
+Future<Map<String, dynamic>> _readJsonFile(File file) async {
+  return _decodeJsonObject(await file.readAsString(), 'auto file');
+}
+
+Map<String, dynamic> _decodeJsonObject(String body, String label) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    if (decoded is Map) {
+      return Map<String, dynamic>.from(decoded);
+    }
+  } on FormatException catch (error) {
+    throw _HttpException(
+      HttpStatus.badRequest,
+      'Invalid JSON in $label: ${error.message}',
+    );
+  }
+
+  throw _HttpException(
+    HttpStatus.badRequest,
+    'Invalid JSON in $label: expected an object.',
+  );
 }
 
 Map<String, dynamic> _normalizedAuto(
@@ -308,6 +339,7 @@ Map<String, dynamic> _normalizedAuto(
     'name': (auto['name'] as String?)?.trim().isNotEmpty == true
         ? (auto['name'] as String).trim()
         : 'Untitled Auto',
+    'autoType': _normalizedAutoType(auto['autoType'] as String?),
     'fieldId': auto['fieldId'] ?? 'rebuilt',
     'createdAt': createdAt ?? auto['createdAt'] ?? now,
     'updatedAt': now,
@@ -319,6 +351,12 @@ Map<String, dynamic> _normalizedAuto(
     'matches': (auto['matches'] as List<dynamic>? ?? const []),
     'selectedMatchId': auto['selectedMatchId'],
   };
+}
+
+String _normalizedAutoType(String? value) {
+  const allowed = {'middle', 'tower-side', 'bump-side'};
+  final normalized = value?.trim().toLowerCase() ?? '';
+  return allowed.contains(normalized) ? normalized : '';
 }
 
 String _nextStorageId(Directory teamDir, String baseId) {
@@ -347,6 +385,8 @@ String _validatedName(String? input, String label) {
   }
   if (value.contains('/') ||
       value.contains(r'\') ||
+      value.contains('\x00') ||
+      value.contains(RegExp(r'[\r\n\t]')) ||
       value == '.' ||
       value == '..') {
     throw _HttpException(HttpStatus.badRequest, 'Invalid $label.');
@@ -367,11 +407,15 @@ Future<void> _serveStatic(HttpRequest request, Directory webDir) async {
   final rawPath = request.uri.path == '/' ? '/index.html' : request.uri.path;
   final safePath = rawPath.startsWith('/') ? rawPath.substring(1) : rawPath;
   final normalizedPath = p.normalize(safePath);
-  if (normalizedPath.startsWith('..')) {
+  final resolvedRoot = p.absolute(webDir.path);
+  final resolvedPath = p.normalize(p.join(resolvedRoot, normalizedPath));
+  if (normalizedPath.startsWith('..') ||
+      (!p.equals(resolvedPath, resolvedRoot) &&
+          !p.isWithin(resolvedRoot, resolvedPath))) {
     throw const _HttpException(HttpStatus.badRequest, 'Invalid static path.');
   }
 
-  final file = File(p.join(webDir.path, normalizedPath));
+  final file = File(resolvedPath);
   final exists = file.existsSync();
   final target = exists ? file : File(p.join(webDir.path, 'index.html'));
 
@@ -414,7 +458,7 @@ void _setCorsHeaders(HttpResponse response) {
   response.headers.set('Access-Control-Allow-Origin', '*');
   response.headers.set(
     'Access-Control-Allow-Methods',
-    'GET, POST, PUT, OPTIONS',
+    'GET, POST, PUT, DELETE, OPTIONS',
   );
   response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
 }
