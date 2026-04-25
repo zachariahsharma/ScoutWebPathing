@@ -1,0 +1,101 @@
+{
+  "version": 3,
+  "storageId": "middle-auto",
+  "team": "Tutorial",
+  "name": "Middle Climb Auto",
+  "fieldId": "rebuilt",
+  "createdAt": "2026-04-25T01:38:14.696Z",
+  "updatedAt": "2026-04-25T02:10:47.873472Z",
+  "points": [],
+  "waypointTimings": [
+    {
+      "timeSeconds": 20,
+      "note": ""
+    },
+    {
+      "timeSeconds": 18.5,
+      "note": ""
+    }
+  ],
+  "path": {
+    "version": "2025.0",
+    "waypoints": [
+      {
+        "anchor": {
+          "x": 3.7868653759904314,
+          "y": 3.9766938256839595
+        },
+        "prevControl": null,
+        "nextControl": {
+          "x": 4.786865375990432,
+          "y": 3.9766938256839595
+        },
+        "isLocked": false,
+        "linkedName": null
+      },
+      {
+        "anchor": {
+          "x": 1.2783439228584241,
+          "y": 3.9936432949618776
+        },
+        "prevControl": {
+          "x": 0.27834392285842413,
+          "y": 3.9936432949618776
+        },
+        "nextControl": null,
+        "isLocked": false,
+        "linkedName": null
+      }
+    ],
+    "rotationTargets": [],
+    "constraintZones": [],
+    "pointTowardsZones": [],
+    "eventMarkers": [],
+    "globalConstraints": {
+      "maxVelocity": 3,
+      "maxAcceleration": 3,
+      "maxAngularVelocity": 540,
+      "maxAngularAcceleration": 720,
+      "nominalVoltage": 12,
+      "unlimited": false
+    },
+    "goalEndState": {
+      "velocity": 0,
+      "rotation": 0
+    },
+    "reversed": false,
+    "folder": null,
+    "idealStartingState": {
+      "velocity": 0,
+      "rotation": 0
+    },
+    "useDefaultConstraints": true
+  },
+  "canMirror": false,
+  "mirrorRotations": [],
+  "matches": [
+    {
+      "id": "match_1",
+      "matchNumber": "Match 1",
+      "label": "Match 1",
+      "waypointTimings": [
+        {
+          "timeSeconds": 20,
+          "note": ""
+        },
+        {
+          "timeSeconds": 18.5,
+          "note": ""
+        }
+      ],
+      "markerTimings": [],
+      "passToCenterTimes": [
+        null,
+        null,
+        null,
+        null
+      ]
+    }
+  ],
+  "selectedMatchId": "match_1"
+}

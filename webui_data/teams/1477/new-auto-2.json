@@ -1,0 +1,169 @@
+{
+  "version": 3,
+  "storageId": "new-auto-2",
+  "team": "1477",
+  "name": "New Auto",
+  "fieldId": "rebuilt",
+  "createdAt": "2026-04-22T23:47:07.095Z",
+  "updatedAt": "2026-04-22T23:47:59.731366Z",
+  "points": [
+    {
+      "id": "marker_1776901666986000",
+      "position": {
+        "x": 7.014254742355743,
+        "y": 7.002528986847316
+      },
+      "waypointRelativePos": 0.7232142857142857,
+      "timeSeconds": 0.43,
+      "note": "",
+      "isToCenter": false,
+      "passNumber": null
+    }
+  ],
+  "waypointTimings": [
+    {
+      "timeSeconds": 0,
+      "note": ""
+    },
+    {
+      "timeSeconds": 0.75,
+      "note": ""
+    },
+    {
+      "timeSeconds": 1.5,
+      "note": ""
+    },
+    {
+      "timeSeconds": 2.5,
+      "note": ""
+    }
+  ],
+  "path": {
+    "version": "2025.0",
+    "waypoints": [
+      {
+        "anchor": {
+          "x": 2,
+          "y": 7
+        },
+        "prevControl": null,
+        "nextControl": {
+          "x": 3.7297301972909302,
+          "y": 8.07
+        },
+        "isLocked": false,
+        "linkedName": null
+      },
+      {
+        "anchor": {
+          "x": 8.190751067432274,
+          "y": 6.672320546230859
+        },
+        "prevControl": {
+          "x": 7.491419914973498,
+          "y": 6.881715072649808
+        },
+        "nextControl": {
+          "x": 8.89008221989105,
+          "y": 6.46292601981191
+        },
+        "isLocked": false,
+        "linkedName": null
+      },
+      {
+        "anchor": {
+          "x": 2.2971160924617195,
+          "y": 6.033729096731449
+        },
+        "prevControl": {
+          "x": 5.091649734982331,
+          "y": 5.785571797703181
+        },
+        "nextControl": {
+          "x": -0.4974175500588922,
+          "y": 6.281886395759716
+        },
+        "isLocked": false,
+        "linkedName": null
+      },
+      {
+        "anchor": {
+          "x": 7.56450695671378,
+          "y": 7.1972841983215545
+        },
+        "prevControl": {
+          "x": 5.998977381478208,
+          "y": 8.150974891416372
+        },
+        "nextControl": null,
+        "isLocked": false,
+        "linkedName": null
+      }
+    ],
+    "rotationTargets": [],
+    "constraintZones": [],
+    "pointTowardsZones": [],
+    "eventMarkers": [],
+    "globalConstraints": {
+      "maxVelocity": 3,
+      "maxAcceleration": 3,
+      "maxAngularVelocity": 540,
+      "maxAngularAcceleration": 720,
+      "nominalVoltage": 12,
+      "unlimited": false
+    },
+    "goalEndState": {
+      "velocity": 0,
+      "rotation": 0
+    },
+    "reversed": false,
+    "folder": null,
+    "idealStartingState": {
+      "velocity": 0,
+      "rotation": 0
+    },
+    "useDefaultConstraints": true
+  },
+  "canMirror": false,
+  "mirrorRotations": [],
+  "matches": [
+    {
+      "id": "match_1",
+      "matchNumber": "Match 1",
+      "label": "Match 1",
+      "waypointTimings": [
+        {
+          "timeSeconds": 0,
+          "note": ""
+        },
+        {
+          "timeSeconds": 0.75,
+          "note": ""
+        },
+        {
+          "timeSeconds": 1.5,
+          "note": ""
+        },
+        {
+          "timeSeconds": 2.5,
+          "note": ""
+        }
+      ],
+      "markerTimings": [
+        {
+          "markerId": "marker_1776901666986000",
+          "timeSeconds": 4,
+          "isToCenter": true,
+          "passNumber": 2
+        }
+      ],
+      "passToCenterTimes": [
+        null,
+        4,
+        null,
+        null
+      ]
+    }
+  ],
+  "selectedMatchId": "match_1"
+}

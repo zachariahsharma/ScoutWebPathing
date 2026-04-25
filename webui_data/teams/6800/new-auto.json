@@ -5,17 +5,19 @@
   "name": "New Auto",
   "fieldId": "rebuilt",
   "createdAt": "2026-04-22T01:25:31.780Z",
-  "updatedAt": "2026-04-22T13:44:51.426019Z",
+  "updatedAt": "2026-04-22T21:10:08.128807Z",
   "points": [
     {
       "id": "marker_1776821147043000",
       "position": {
-        "x": 7.274207864082829,
-        "y": 7.0841138937428845
+        "x": 6.091796361957945,
+        "y": 7.611046254269187
       },
-      "waypointRelativePos": 0.7785714285714286,
+      "waypointRelativePos": 0.6142857142857143,
       "timeSeconds": 1.16,
-      "note": ""
+      "note": "",
+      "isToCenter": false,
+      "passNumber": null
     }
   ],
   "waypointTimings": [
@@ -46,12 +48,12 @@
       },
       {
         "anchor": {
-          "x": 8.191015746643018,
-          "y": 6.178931828710075
+          "x": 7.923956386552222,
+          "y": 6.3687526525388245
         },
         "prevControl": {
-          "x": 7.325560476030931,
-          "y": 7.865372567434373
+          "x": 7.058501115940135,
+          "y": 8.055193391263124
         },
         "nextControl": null,
         "isLocked": false,
@@ -92,6 +94,7 @@
   "matches": [
     {
       "id": "match_1",
+      "matchNumber": "",
       "label": "Match 1",
       "waypointTimings": [
         {
@@ -106,11 +109,13 @@
       "markerTimings": [
         {
           "markerId": "marker_1776821147043000",
-          "timeSeconds": 1.16
+          "timeSeconds": 1.16,
+          "isToCenter": false,
+          "passNumber": null
         }
       ],
       "passToCenterTimes": [
-        1,
+        null,
         null,
         null,
         null
@@ -118,6 +123,7 @@
     },
     {
       "id": "match_1776821386445000",
+      "matchNumber": "",
       "label": "Match 2",
       "waypointTimings": [
         {
@@ -132,11 +138,13 @@
       "markerTimings": [
         {
           "markerId": "marker_1776821147043000",
-          "timeSeconds": 1.16
+          "timeSeconds": 1.16,
+          "isToCenter": false,
+          "passNumber": null
         }
       ],
       "passToCenterTimes": [
-        2,
+        null,
         null,
         null,
         null
