@@ -5,6 +5,7 @@ import 'package:pathplanner/webui/models/observed_auto.dart';
 import 'package:pathplanner/webui/models/observed_field.dart';
 import 'package:pathplanner/webui/services/webui_api.dart';
 import 'package:pathplanner/webui/widgets/observed_auto_thumbnail.dart';
+import 'package:pathplanner/webui/widgets/scouting_match_editor.dart';
 import 'package:pathplanner/webui/widgets/scouting_pathplanner_editor.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -14,6 +15,8 @@ class ScoutingWebHomePage extends StatefulWidget {
   @override
   State<ScoutingWebHomePage> createState() => _ScoutingWebHomePageState();
 }
+
+enum _SaveStatus { saved, unsaved, saving, failed }
 
 class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
   final WebUiApi _api = WebUiApi();
@@ -31,8 +34,12 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
   bool _browserCollapsed = false;
   bool _browserPreviewMode = false;
   bool _saveQueued = false;
+  int _editRevision = 0;
+  int _latestSaveRequest = 0;
+  _SaveStatus _saveStatus = _SaveStatus.saved;
   String? _selectedMatchId;
   Timer? _autosaveTimer;
+  Future<void>? _activeSave;
 
   @override
   void initState() {
@@ -63,6 +70,38 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
         .toList(growable: false);
   }
 
+  String get _saveStatusLabel {
+    switch (_saveStatus) {
+      case _SaveStatus.saving:
+        return 'Saving...';
+      case _SaveStatus.unsaved:
+        return 'Unsaved';
+      case _SaveStatus.failed:
+        return 'Save failed';
+      case _SaveStatus.saved:
+        return 'Saved';
+    }
+  }
+
+  IconData get _saveStatusIcon {
+    switch (_saveStatus) {
+      case _SaveStatus.saving:
+        return Icons.sync_rounded;
+      case _SaveStatus.unsaved:
+        return Icons.schedule_rounded;
+      case _SaveStatus.failed:
+        return Icons.error_outline;
+      case _SaveStatus.saved:
+        return Icons.cloud_done_outlined;
+    }
+  }
+
+  bool _isSavingAuto(String team, String storageId) {
+    return _saving &&
+        _currentAuto?.team == team &&
+        _currentAuto?.storageId == storageId;
+  }
+
   Future<void> _loadTeams({String? selectTeam}) async {
     setState(() {
       _loadingTeams = true;
@@ -91,6 +130,7 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
           _autos = [];
           _currentAuto = null;
           _dirty = false;
+          _saveStatus = _SaveStatus.saved;
         });
       }
     } catch (error) {
@@ -121,6 +161,7 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
         setState(() {
           _currentAuto = null;
           _dirty = false;
+          _saveStatus = _SaveStatus.saved;
           _autoNameController.clear();
         });
       }
@@ -140,6 +181,7 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
         _currentAuto = auto;
         _dirty = false;
         _loadingAuto = false;
+        _saveStatus = _SaveStatus.saved;
         _selectedMatchId = auto.effectiveSelectedMatchId;
       });
       _autoNameController.text = auto.name;
@@ -202,11 +244,65 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
       setState(() {
         _currentAuto = created;
         _dirty = false;
+        _saveStatus = _SaveStatus.saved;
         _autos = _upsertSummary(_autos, _summaryFromAuto(created));
         _selectedMatchId = created.effectiveSelectedMatchId;
       });
       _autoNameController.text = created.name;
       await _openAuto(created.team, created.storageId);
+    } catch (error) {
+      _showMessage(error.toString(), isError: true);
+    }
+  }
+
+  Future<void> _deleteAuto(String team, ObservedAutoSummary auto) async {
+    final confirmed = await _showDeleteAutoDialog(auto.name);
+    if (confirmed != true) {
+      return;
+    }
+
+    final deletingCurrent =
+        _currentAuto?.team == team && _currentAuto?.storageId == auto.id;
+    if (deletingCurrent && _saving) {
+      _showMessage('Wait for the current save to finish before deleting.',
+          isError: true);
+      return;
+    }
+
+    _autosaveTimer?.cancel();
+    _autosaveTimer = null;
+
+    final deletedIndex = _autos.indexWhere((entry) => entry.id == auto.id);
+
+    try {
+      await _api.deleteAuto(team, auto.id);
+
+      final remaining = [
+        for (final entry in _autos)
+          if (entry.id != auto.id) entry,
+      ];
+      final nextIndex =
+          deletedIndex < 0 ? 0 : min(deletedIndex, remaining.length - 1);
+      final nextAutoId = deletingCurrent && remaining.isNotEmpty
+          ? remaining[nextIndex].id
+          : null;
+
+      setState(() {
+        _autos = remaining;
+        if (deletingCurrent) {
+          _currentAuto = null;
+          _dirty = false;
+          _saveStatus = _SaveStatus.saved;
+          _selectedMatchId = null;
+          _autoNameController.clear();
+        }
+      });
+
+      if (nextAutoId != null) {
+        await _openAuto(team, nextAutoId);
+      }
+
+      _showMessage('Deleted "${auto.name}"');
     } catch (error) {
       _showMessage(error.toString(), isError: true);
     }
@@ -220,13 +316,26 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
 
     if (_saving) {
       _saveQueued = true;
+      final activeSave = _activeSave;
+      if (activeSave != null) {
+        await activeSave;
+      }
+      if (_dirty && _currentAuto != null) {
+        await _saveCurrentAuto(silent: silent);
+      }
       return;
     }
 
     _autosaveTimer?.cancel();
+    _autosaveTimer = null;
+    final saveRevision = _editRevision;
+    final saveRequest = ++_latestSaveRequest;
+    final activeSave = Completer<void>();
+    _activeSave = activeSave.future;
 
     setState(() {
       _saving = true;
+      _saveStatus = _SaveStatus.saving;
     });
 
     try {
@@ -239,18 +348,28 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
       final saved = await _api.saveAuto(sanitized);
       final stillCurrent =
           _currentAuto != null && _isSameDocument(_currentAuto!, auto);
+      final saveIsLatest = saveRequest == _latestSaveRequest;
+      final hasNewerEdits = _editRevision > saveRevision;
 
       setState(() {
         _saving = false;
-        _autos = _upsertSummary(_autos, _summaryFromAuto(saved));
-        if (stillCurrent) {
+        if (stillCurrent && saveIsLatest) {
+          _autos = _upsertSummary(_autos, _summaryFromAuto(saved));
           _currentAuto = saved;
-          _dirty = false;
           _selectedMatchId = saved.effectiveSelectedMatchId;
+        } else if (_selectedTeam == saved.team) {
+          _autos = _upsertSummary(_autos, _summaryFromAuto(saved));
+        }
+
+        if (stillCurrent && saveIsLatest && !hasNewerEdits) {
+          _dirty = false;
+          _saveStatus = _SaveStatus.saved;
+        } else if (_dirty) {
+          _saveStatus = _SaveStatus.unsaved;
         }
       });
 
-      if (stillCurrent) {
+      if (stillCurrent && saveIsLatest && !hasNewerEdits) {
         _autoNameController.value = TextEditingValue(
           text: saved.name,
           selection: TextSelection.collapsed(offset: saved.name.length),
@@ -263,12 +382,17 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
     } catch (error) {
       setState(() {
         _saving = false;
+        _saveStatus = _SaveStatus.failed;
       });
       if (!silent) {
         _showMessage(error.toString(), isError: true);
       }
     } finally {
-      if (_saveQueued) {
+      activeSave.complete();
+      if (identical(_activeSave, activeSave.future)) {
+        _activeSave = null;
+      }
+      if (_saveQueued || _editRevision > saveRevision) {
         _saveQueued = false;
         if (_dirty && _currentAuto != null) {
           unawaited(_saveCurrentAuto(silent: true));
@@ -345,6 +469,12 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
     setState(() {
       _currentAuto = auto;
       _dirty = dirty;
+      if (dirty) {
+        _editRevision++;
+        _saveStatus = _SaveStatus.unsaved;
+      } else {
+        _saveStatus = _SaveStatus.saved;
+      }
     });
     if (dirty) {
       _scheduleAutosave();
@@ -362,19 +492,7 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
   }
 
   ObservedAutoSummary _summaryFromAuto(ObservedAuto auto) {
-    return ObservedAutoSummary(
-      id: auto.storageId,
-      name: auto.name,
-      updatedAt: auto.updatedAt,
-      fieldId: auto.fieldId,
-      points: auto.points,
-      waypointTimings: auto.waypointTimings,
-      pathData: auto.pathData,
-      canMirror: auto.canMirror,
-      mirrorRotations: auto.mirrorRotations,
-      matches: auto.matches,
-      selectedMatchId: auto.selectedMatchId,
-    );
+    return ObservedAutoSummary.fromAuto(auto);
   }
 
   List<ObservedAutoSummary> _upsertSummary(
@@ -441,6 +559,33 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
       }
       return value.trim();
     });
+  }
+
+  Future<bool?> _showDeleteAutoDialog(String autoName) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Auto'),
+          content: Text('Delete "$autoName"? This cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -681,35 +826,57 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
             color: selected
                 ? scheme.surfaceContainerHighest
                 : scheme.surfaceContainer,
-            child: InkWell(
-              onTap: () => _selectAuto(team, auto.id),
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: ObservedAutoThumbnail(
-                        auto: previewAuto,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: InkWell(
+                    onTap: () => _selectAuto(team, auto.id),
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: ObservedAutoThumbnail(
+                              auto: previewAuto,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            auto.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${previewMatch.displayLabel} • 1st pass ${previewMatch.passToCenterTimes.first == null ? 'n/a' : '${previewMatch.passToCenterTimes.first!.toStringAsFixed(2)}s'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      auto.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${previewMatch.displayLabel} • 1st pass ${previewMatch.passToCenterTimes.first == null ? 'n/a' : '${previewMatch.passToCenterTimes.first!.toStringAsFixed(2)}s'}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: IconButton.filledTonal(
+                    tooltip: 'Delete auto',
+                    onPressed: _isSavingAuto(team, auto.id)
+                        ? null
+                        : () => _deleteAuto(team, auto),
+                    icon: const Icon(Icons.delete_outline),
+                    color: scheme.error,
+                    style: IconButton.styleFrom(
+                      backgroundColor:
+                          scheme.surfaceContainerHighest.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ),
+              ],
             ),
           );
         },
@@ -735,7 +902,20 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
             subtitle: Text(
               '${previewMatch.displayLabel} • 1st pass ${previewMatch.passToCenterTimes.first == null ? 'n/a' : '${previewMatch.passToCenterTimes.first!.toStringAsFixed(2)}s'}',
             ),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Delete auto',
+                  onPressed: _isSavingAuto(team, auto.id)
+                      ? null
+                      : () => _deleteAuto(team, auto),
+                  icon: const Icon(Icons.delete_outline),
+                  color: scheme.error,
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
             onTap: () => _selectAuto(team, auto.id),
           ),
         );
@@ -833,37 +1013,20 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
       return;
     }
 
-    final label = await _showNameDialog(
+    final matchNumber = await _showNameDialog(
       title: 'Add Match',
-      label: 'Match name',
-      initialValue: '',
+      label: 'Match number',
+      initialValue: '${auto.effectiveMatches().length + 1}',
     );
-    if (label == null) {
+    if (matchNumber == null) {
       return;
     }
 
-    final waypointCount = auto.waypointTimings.length;
-    final blankWaypointTimings = [
-      for (int i = 0; i < waypointCount; i++)
-        ObservedWaypointTiming(timeSeconds: i.toDouble()),
-    ];
-    final blankMarkerTimings = [
-      for (final point in auto.points)
-        ObservedMarkerTiming(
-          markerId: point.id,
-          timeSeconds: 0,
-          isToCenter: false,
-          passNumber: null,
-        ),
-    ];
     final id = 'match_${DateTime.now().microsecondsSinceEpoch}';
-    final newMatch = ObservedMatchObservation(
+    final newMatch = ObservedMatchObservation.blankForAuto(
       id: id,
-      matchNumber: 'Match ${auto.effectiveMatches().length + 1}',
-      label: label,
-      waypointTimings: blankWaypointTimings,
-      markerTimings: blankMarkerTimings,
-      passToCenterTimes: const [null, null, null, null],
+      matchNumber: matchNumber.trim(),
+      auto: auto,
     );
 
     _updateAuto(
@@ -900,26 +1063,6 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
     setState(() {
       _selectedMatchId = nextSelected;
     });
-  }
-
-  void _renameSelectedMatch(String value) {
-    final auto = _currentAuto;
-    if (auto == null || value.trim().isEmpty) {
-      return;
-    }
-
-    final activeMatchId = _selectedMatchId ?? auto.effectiveSelectedMatchId;
-    _updateAuto(
-      auto.copyWith(
-        matches: [
-          for (final match in auto.effectiveMatches())
-            if (match.id == activeMatchId)
-              match.copyWith(label: value.trim())
-            else
-              match,
-        ],
-      ),
-    );
   }
 
   void _renameSelectedMatchNumber(String value) {
@@ -965,14 +1108,27 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
     _updateAuto(auto.copyWith(mirrorRotations: next.toList()..sort()));
   }
 
+  void _setAutoType(String? value) {
+    final auto = _currentAuto;
+    if (auto == null || value == null) {
+      return;
+    }
+    _updateAuto(auto.copyWith(autoType: value));
+  }
+
+  double? _parseOptionalTime(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : double.tryParse(trimmed);
+  }
+
   void _setWaypointTimingForSelectedMatch(int index, String value) {
     final auto = _currentAuto;
     if (auto == null || index < 0) {
       return;
     }
 
-    final parsed = double.tryParse(value.trim());
-    if (parsed == null) {
+    final parsed = _parseOptionalTime(value);
+    if (parsed == null && value.trim().isNotEmpty) {
       return;
     }
 
@@ -1004,8 +1160,8 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
       return;
     }
 
-    final parsed = double.tryParse(value.trim());
-    if (parsed == null) {
+    final parsed = _parseOptionalTime(value);
+    if (parsed == null && value.trim().isNotEmpty) {
       return;
     }
 
@@ -1020,6 +1176,34 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
                   for (final timing in match.markerTimings)
                     if (timing.markerId == markerId)
                       timing.copyWith(timeSeconds: parsed)
+                    else
+                      timing,
+                ],
+              )
+            else
+              match,
+        ],
+      ),
+    );
+  }
+
+  void _setMarkerNameForSelectedMatch(String markerId, String value) {
+    final auto = _currentAuto;
+    if (auto == null) {
+      return;
+    }
+
+    final activeMatchId = _selectedMatchId ?? auto.effectiveSelectedMatchId;
+    _updateAuto(
+      auto.copyWith(
+        matches: [
+          for (final match in auto.effectiveMatches())
+            if (match.id == activeMatchId)
+              match.copyWith(
+                markerTimings: [
+                  for (final timing in match.markerTimings)
+                    if (timing.markerId == markerId)
+                      timing.copyWith(name: value.trim())
                     else
                       timing,
                 ],
@@ -1098,331 +1282,22 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
     ObservedAuto auto,
     String activeMatchId,
   ) {
-    final matches = auto.effectiveMatches();
-    final activeMatch = auto.matchById(activeMatchId);
-    final scheme = Theme.of(context).colorScheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Match Details',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: 240,
-                      child: DropdownButtonFormField<String>(
-                        key: ValueKey(
-                          'match-selector-${activeMatch.id}-${activeMatch.displayLabel}',
-                        ),
-                        initialValue: activeMatch.id,
-                        decoration: const InputDecoration(
-                          labelText: 'Match',
-                          prefixIcon: Icon(Icons.sports_score_outlined),
-                        ),
-                        items: [
-                          for (final match in matches)
-                            DropdownMenuItem(
-                              value: match.id,
-                              child: Text(match.displayLabel),
-                            ),
-                        ],
-                        onChanged: _selectMatch,
-                      ),
-                    ),
-                    SizedBox(
-                      width: 220,
-                      child: TextFormField(
-                        key: ValueKey(
-                          'match-number-${activeMatch.id}-${activeMatch.matchNumber}',
-                        ),
-                        initialValue: activeMatch.matchNumber,
-                        decoration: const InputDecoration(
-                          labelText: 'Match number',
-                          prefixIcon: Icon(Icons.tag_outlined),
-                        ),
-                        onChanged: _renameSelectedMatchNumber,
-                      ),
-                    ),
-                    SizedBox(
-                      width: 280,
-                      child: TextFormField(
-                        key: ValueKey(
-                          'match-label-${activeMatch.id}-${activeMatch.label}',
-                        ),
-                        initialValue: activeMatch.label,
-                        decoration: const InputDecoration(
-                          labelText: 'Match name',
-                          prefixIcon: Icon(Icons.edit_note_outlined),
-                        ),
-                        onChanged: _renameSelectedMatch,
-                      ),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _addMatch,
-                      icon: const Icon(Icons.add_circle_outline),
-                      label: const Text('Add Match'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed:
-                          matches.length <= 1 ? null : _removeSelectedMatch,
-                      icon: const Icon(Icons.remove_circle_outline),
-                      label: const Text('Remove Match'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final match in matches)
-                      Chip(
-                        backgroundColor: match.id == activeMatch.id
-                            ? scheme.primary.withValues(alpha: 0.16)
-                            : scheme.surfaceContainer,
-                        label: Text(match.displayLabel),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Mirror',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  value: auto.canMirror,
-                  onChanged: _setCanMirror,
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Can be mirrored'),
-                ),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    for (final option in const [
-                      (90, 'Other Side Same Alliance'),
-                      (270, 'Other Side Other Alliance'),
-                      (180, 'Same Side Other Alliance'),
-                    ])
-                      FilterChip(
-                        selected: auto.mirrorRotations.contains(option.$1),
-                        onSelected: auto.canMirror
-                            ? (value) => _toggleMirrorRotation(option.$1, value)
-                            : null,
-                        label: Text(option.$2),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Match Timings',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Waypoints',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    for (int i = 0; i < activeMatch.waypointTimings.length; i++)
-                      SizedBox(
-                        width: 180,
-                        child: TextFormField(
-                          key: ValueKey(
-                            'waypoint-${activeMatch.id}-$i-${activeMatch.waypointTimings[i].timeSeconds}',
-                          ),
-                          initialValue: activeMatch
-                              .waypointTimings[i].timeSeconds
-                              .toStringAsFixed(2),
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: InputDecoration(
-                            labelText: i == 0
-                                ? 'Start Time (s)'
-                                : i == activeMatch.waypointTimings.length - 1
-                                    ? 'End Time (s)'
-                                    : 'Waypoint ${i + 1} (s)',
-                            prefixIcon: Icon(
-                              i == 0
-                                  ? Icons.play_arrow_rounded
-                                  : i == activeMatch.waypointTimings.length - 1
-                                      ? Icons.flag_outlined
-                                      : Icons.route_outlined,
-                            ),
-                          ),
-                          onChanged: (value) =>
-                              _setWaypointTimingForSelectedMatch(i, value),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Path Timestamps',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 12),
-                if (activeMatch.markerTimings.isEmpty)
-                  Text(
-                    'No path timestamps yet. Right click on the path to add one.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  )
-                else
-                  Column(
-                    children: [
-                      for (int i = 0; i < activeMatch.markerTimings.length; i++)
-                        Padding(
-                          padding: EdgeInsets.only(
-                            bottom: i == activeMatch.markerTimings.length - 1
-                                ? 0
-                                : 12,
-                          ),
-                          child: Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              SizedBox(
-                                width: 120,
-                                child: Text('Timestamp ${i + 1}'),
-                              ),
-                              SizedBox(
-                                width: 160,
-                                child: TextFormField(
-                                  key: ValueKey(
-                                    'marker-${activeMatch.id}-${activeMatch.markerTimings[i].markerId}-${activeMatch.markerTimings[i].timeSeconds}',
-                                  ),
-                                  initialValue: activeMatch
-                                      .markerTimings[i].timeSeconds
-                                      .toStringAsFixed(2),
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Time (s)',
-                                    prefixIcon: Icon(Icons.timer_outlined),
-                                  ),
-                                  onChanged: (value) =>
-                                      _setMarkerTimingForSelectedMatch(
-                                    activeMatch.markerTimings[i].markerId,
-                                    value,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 210,
-                                child: CheckboxListTile(
-                                  key: ValueKey(
-                                    'center-${activeMatch.id}-${activeMatch.markerTimings[i].markerId}-${activeMatch.markerTimings[i].isToCenter}',
-                                  ),
-                                  contentPadding: EdgeInsets.zero,
-                                  dense: true,
-                                  controlAffinity:
-                                      ListTileControlAffinity.leading,
-                                  value:
-                                      activeMatch.markerTimings[i].isToCenter,
-                                  title: const Text('This to center'),
-                                  onChanged: (value) =>
-                                      _setMarkerToCenterForSelectedMatch(
-                                    activeMatch.markerTimings[i].markerId,
-                                    value ?? false,
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 180,
-                                child: DropdownButtonFormField<int>(
-                                  key: ValueKey(
-                                    'pass-${activeMatch.id}-${activeMatch.markerTimings[i].markerId}-${activeMatch.markerTimings[i].passNumber}',
-                                  ),
-                                  initialValue:
-                                      activeMatch.markerTimings[i].isToCenter
-                                          ? (activeMatch.markerTimings[i]
-                                                  .passNumber ??
-                                              1)
-                                          : 1,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Pass to center',
-                                    prefixIcon: Icon(Icons.swap_horiz_outlined),
-                                  ),
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 1,
-                                      child: Text('Pass 1'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 2,
-                                      child: Text('Pass 2'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 3,
-                                      child: Text('Pass 3'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 4,
-                                      child: Text('Pass 4'),
-                                    ),
-                                  ],
-                                  onChanged:
-                                      activeMatch.markerTimings[i].isToCenter
-                                          ? (value) =>
-                                              _setMarkerPassForSelectedMatch(
-                                                activeMatch
-                                                    .markerTimings[i].markerId,
-                                                value,
-                                              )
-                                          : null,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
+    return ScoutingMatchEditor(
+      auto: auto,
+      activeMatchId: activeMatchId,
+      documentKey: auto.createdAt.isNotEmpty ? auto.createdAt : auto.storageId,
+      onSelectMatch: _selectMatch,
+      onAddMatch: _addMatch,
+      onRemoveMatch: _removeSelectedMatch,
+      onRenameMatchNumber: _renameSelectedMatchNumber,
+      onSetCanMirror: _setCanMirror,
+      onToggleMirrorRotation: _toggleMirrorRotation,
+      onSetAutoType: _setAutoType,
+      onSetWaypointTiming: _setWaypointTimingForSelectedMatch,
+      onSetMarkerTiming: _setMarkerTimingForSelectedMatch,
+      onSetMarkerName: _setMarkerNameForSelectedMatch,
+      onSetMarkerToCenter: _setMarkerToCenterForSelectedMatch,
+      onSetMarkerPass: _setMarkerPassForSelectedMatch,
     );
   }
 
@@ -1505,31 +1380,18 @@ class _ScoutingWebHomePageState extends State<ScoutingWebHomePage> {
                         ),
                       ),
                       OutlinedButton.icon(
-                        onPressed: _exportCurrentAuto,
+                        onPressed: _saving ? null : _exportCurrentAuto,
                         icon: const Icon(Icons.data_object_rounded),
                         label: const Text('Export JSON'),
                       ),
                       OutlinedButton.icon(
-                        onPressed: _exportCurrentRenderJpeg,
+                        onPressed: _saving ? null : _exportCurrentRenderJpeg,
                         icon: const Icon(Icons.image_outlined),
                         label: const Text('Export JPEG'),
                       ),
                       Chip(
-                        label: Text(
-                          _saving
-                              ? 'Saving...'
-                              : _dirty
-                                  ? 'Saving soon'
-                                  : 'Saved',
-                        ),
-                        avatar: Icon(
-                          _saving
-                              ? Icons.sync_rounded
-                              : _dirty
-                                  ? Icons.schedule_rounded
-                                  : Icons.cloud_done_outlined,
-                          size: 18,
-                        ),
+                        label: Text(_saveStatusLabel),
+                        avatar: Icon(_saveStatusIcon, size: 18),
                       ),
                     ],
                   ),

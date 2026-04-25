@@ -6,6 +6,12 @@ import 'package:image/image.dart' as img;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+const Object _unchanged = Object();
+
+double _sortTime(double? timeSeconds) {
+  return timeSeconds ?? double.infinity;
+}
+
 class ObservedAutoExport {
   static const int _infoPanelWidth = 700;
 
@@ -22,7 +28,18 @@ class ObservedAutoExport {
       throw Exception('Failed to load field image: ${field.assetPath}');
     }
 
-    final canvasWidth = fieldImage.width + _infoPanelWidth;
+    final viewport = _FieldViewport.forView(field, view);
+    final visibleFieldImage = viewport.isFullWidth
+        ? fieldImage
+        : img.copyCrop(
+            fieldImage,
+            x: viewport.x,
+            y: 0,
+            width: viewport.width,
+            height: fieldImage.height,
+          );
+
+    final canvasWidth = visibleFieldImage.width + _infoPanelWidth;
     final canvasHeight = max(fieldImage.height, 1800);
     final canvas = img.Image(
       width: canvasWidth,
@@ -31,9 +48,9 @@ class ObservedAutoExport {
     );
 
     img.fill(canvas, color: img.ColorRgb8(5, 5, 5));
-    img.compositeImage(canvas, fieldImage, dstX: 0, dstY: 0);
-    _paintPath(canvas, field, view);
-    _paintInfoPanel(canvas, fieldImage.width, view);
+    img.compositeImage(canvas, visibleFieldImage, dstX: 0, dstY: 0);
+    _paintPath(canvas, field, viewport, view);
+    _paintInfoPanel(canvas, visibleFieldImage.width, view);
 
     return Uint8List.fromList(img.encodeJpg(canvas, quality: 92));
   }
@@ -82,6 +99,7 @@ class ObservedAutoExport {
   static void _paintPath(
     img.Image canvas,
     _ServerFieldSpec field,
+    _FieldViewport viewport,
     _ResolvedAutoView view,
   ) {
     final positions = view.sampledPathPositions;
@@ -95,8 +113,8 @@ class ObservedAutoExport {
     final occupiedTags = <_LabelRect>[];
 
     for (int i = 0; i < positions.length - 1; i++) {
-      final start = _toCanvas(field, positions[i]);
-      final end = _toCanvas(field, positions[i + 1]);
+      final start = _toCanvas(field, viewport, positions[i]);
+      final end = _toCanvas(field, viewport, positions[i + 1]);
       for (int thickness = 10; thickness >= 4; thickness -= 3) {
         img.drawLine(
           canvas,
@@ -111,7 +129,7 @@ class ObservedAutoExport {
     }
 
     for (int i = 0; i < view.waypointAnchors.length; i++) {
-      final center = _toCanvas(field, view.waypointAnchors[i]);
+      final center = _toCanvas(field, viewport, view.waypointAnchors[i]);
       final fill = i == 0
           ? img.ColorRgb8(244, 211, 122)
           : i == view.waypointAnchors.length - 1
@@ -133,22 +151,10 @@ class ObservedAutoExport {
           color: black,
         );
       }
-
-      if (i < view.waypointTimings.length) {
-        _drawAnchoredTag(
-          canvas,
-          anchorX: center.dx.round(),
-          anchorY: center.dy.round(),
-          text:
-              '${_waypointName(i, view.waypointAnchors.length)}  ${view.waypointTimings[i].toStringAsFixed(2)}s',
-          occupied: occupiedTags,
-          large: true,
-        );
-      }
     }
 
     for (final marker in view.markers) {
-      final center = _toCanvas(field, marker.position);
+      final center = _toCanvas(field, viewport, marker.position);
       const size = 13;
       img.drawLine(
         canvas,
@@ -191,7 +197,7 @@ class ObservedAutoExport {
         canvas,
         anchorX: center.dx.round(),
         anchorY: center.dy.round(),
-        text: '${marker.label}  ${marker.timeSeconds.toStringAsFixed(2)}s',
+        text: _markerTimeLabel(marker),
         occupied: occupiedTags,
         large: true,
       );
@@ -273,7 +279,7 @@ class ObservedAutoExport {
         canvas,
         panelX + 36,
         y + 12,
-        '$label • ${view.waypointTimings[i].toStringAsFixed(2)}s',
+        '$label • ${_formatTime(view.waypointTimings[i])}',
         size: 28,
       );
     }
@@ -285,7 +291,7 @@ class ObservedAutoExport {
           canvas,
           panelX + 36,
           y + 12,
-          '${marker.label} • ${marker.timeSeconds.toStringAsFixed(2)}s',
+          '${marker.label} • ${_formatTime(marker.timeSeconds)}',
           size: 28,
         );
       }
@@ -497,23 +503,72 @@ class ObservedAutoExport {
     }
   }
 
-  static String _waypointName(int index, int count) {
-    if (index == 0) {
-      return 'Start';
-    }
-    if (index == count - 1) {
-      return 'End';
-    }
-    return 'Waypoint ${index + 1}';
+  static String _formatTime(double? timeSeconds) {
+    return timeSeconds == null ? 'n/a' : '${timeSeconds.toStringAsFixed(2)}s';
   }
 
-  static _PixelPoint _toCanvas(_ServerFieldSpec field, _Point point) {
+  static String _markerTimeLabel(_TimedMarker marker) {
+    final time = _formatTime(marker.timeSeconds);
+    return marker.label.isEmpty ? time : '${marker.label}  $time';
+  }
+
+  static _PixelPoint _toCanvas(
+    _ServerFieldSpec field,
+    _FieldViewport viewport,
+    _Point point,
+  ) {
     final x = ((point.x + field.marginMeters) / field.totalWidthMeters) *
-        field.imageWidth;
+            field.imageWidth -
+        viewport.x;
     final y = field.imageHeight -
         (((point.y + field.marginMeters) / field.totalHeightMeters) *
             field.imageHeight);
     return _PixelPoint(x, y);
+  }
+}
+
+class _FieldViewport {
+  static const double _visibleFraction = 0.6;
+
+  final int x;
+  final int width;
+  final int fullWidth;
+
+  const _FieldViewport({
+    required this.x,
+    required this.width,
+    required this.fullWidth,
+  });
+
+  bool get isFullWidth => x == 0 && width == fullWidth;
+
+  factory _FieldViewport.forView(
+    _ServerFieldSpec field,
+    _ResolvedAutoView view,
+  ) {
+    final content = [
+      ...view.sampledPathPositions,
+      ...view.waypointAnchors,
+      for (final marker in view.markers) marker.position,
+    ];
+
+    if (content.isEmpty) {
+      return _FieldViewport(
+        x: 0,
+        width: field.imageWidth,
+        fullWidth: field.imageWidth,
+      );
+    }
+
+    final centerX = content.map((point) => point.x).reduce((a, b) => a + b) /
+        content.length;
+    final visibleWidth = (field.imageWidth * _visibleFraction).round();
+    final showLeftSide = centerX <= field.widthMeters / 2.0;
+    return _FieldViewport(
+      x: showLeftSide ? 0 : field.imageWidth - visibleWidth,
+      width: visibleWidth,
+      fullWidth: field.imageWidth,
+    );
   }
 }
 
@@ -524,7 +579,7 @@ class _ResolvedAutoView {
   final String matchLabel;
   final bool canMirror;
   final List<int> mirrorRotations;
-  final List<double> waypointTimings;
+  final List<double?> waypointTimings;
   final List<_TimedMarker> markers;
   final List<double?> passToCenterTimes;
   final List<List<double?>> allMatchPassTimes;
@@ -576,15 +631,20 @@ class _ResolvedAutoView {
           ),
           timeSeconds:
               ((pointTimingById[point['id']]?['timeSeconds'] as num?) ??
-                      (point['timeSeconds'] as num?) ??
-                      0)
-                  .toDouble(),
+                      (point['timeSeconds'] as num?))
+                  ?.toDouble(),
           isToCenter:
               pointTimingById[point['id']]?['isToCenter'] as bool? ?? false,
           passNumber:
               (pointTimingById[point['id']]?['passNumber'] as num?)?.toInt(),
+          label: (pointTimingById[point['id']]?['name'] as String? ??
+                  point['note'] as String? ??
+                  '')
+              .trim(),
         ),
-    ]..sort((a, b) => a.timeSeconds.compareTo(b.timeSeconds));
+    ]..sort((a, b) => _sortTime(a.timeSeconds).compareTo(
+          _sortTime(b.timeSeconds),
+        ));
 
     final markers = <_TimedMarker>[];
     int genericMarkerCount = 0;
@@ -592,17 +652,18 @@ class _ResolvedAutoView {
       genericMarkerCount++;
       markers.add(
         marker.copyWith(
-          label: marker.isToCenter
-              ? 'Pass ${marker.passNumber ?? 1} To Center'
-              : 'Timestamp $genericMarkerCount',
+          label: marker.label.isNotEmpty
+              ? marker.label
+              : marker.isToCenter
+                  ? 'Pass ${marker.passNumber ?? 1} To Center'
+                  : 'Timestamp $genericMarkerCount',
         ),
       );
     }
 
     final waypointTimings =
         (match['waypointTimings'] as List<dynamic>? ?? const [])
-            .map((entry) =>
-                ((entry as Map)['timeSeconds'] as num?)?.toDouble() ?? 0.0)
+            .map((entry) => ((entry as Map)['timeSeconds'] as num?)?.toDouble())
             .toList(growable: false);
 
     final allMatchPassTimes = [
@@ -666,14 +727,16 @@ class _ResolvedAutoView {
   static Map<String, dynamic> _legacyMatch(Map<String, dynamic> autoJson) {
     return {
       'id': 'match_1',
-      'matchNumber': 'Match 1',
-      'label': 'Match 1',
+      'matchNumber': '1',
+      'label': '',
       'waypointTimings': autoJson['waypointTimings'] ?? const [],
       'markerTimings': [
         for (final point in _rawPoints(autoJson))
           {
             'markerId': point['id'],
-            'timeSeconds': point['timeSeconds'] ?? 0,
+            if (point['timeSeconds'] != null)
+              'timeSeconds': point['timeSeconds'],
+            'name': point['note'] ?? '',
           },
       ],
       'passToCenterTimes': const [null, null, null, null],
@@ -745,26 +808,28 @@ class _ResolvedAutoView {
   }
 
   static String _matchLabel(Map<String, dynamic> match) {
-    final matchNumber = (match['matchNumber'] as String? ?? '').trim();
-    final label = (match['label'] as String? ?? '').trim();
-
-    if (matchNumber.isEmpty && label.isEmpty) {
-      return 'Match';
-    }
-    if (matchNumber.isEmpty) {
-      return label;
-    }
-    if (label.isEmpty || matchNumber.toLowerCase() == label.toLowerCase()) {
+    final matchNumber = _displayMatchNumber(
+      match['matchNumber'] as String? ?? '',
+    );
+    if (matchNumber.isNotEmpty) {
       return matchNumber;
     }
-    return '$matchNumber - $label';
+
+    final label = _displayMatchNumber(match['label'] as String? ?? '');
+    return label.isEmpty ? '1' : label;
+  }
+
+  static String _displayMatchNumber(String value) {
+    final trimmed = value.trim();
+    final matchPrefix = RegExp(r'^match\s+', caseSensitive: false);
+    return trimmed.replaceFirst(matchPrefix, '').trim();
   }
 }
 
 class _TimedMarker {
   final String id;
   final _Point position;
-  final double timeSeconds;
+  final double? timeSeconds;
   final bool isToCenter;
   final int? passNumber;
   final String label;
@@ -781,7 +846,7 @@ class _TimedMarker {
   _TimedMarker copyWith({
     String? id,
     _Point? position,
-    double? timeSeconds,
+    Object? timeSeconds = _unchanged,
     bool? isToCenter,
     int? passNumber,
     String? label,
@@ -789,7 +854,8 @@ class _TimedMarker {
     return _TimedMarker(
       id: id ?? this.id,
       position: position ?? this.position,
-      timeSeconds: timeSeconds ?? this.timeSeconds,
+      timeSeconds:
+          timeSeconds == _unchanged ? this.timeSeconds : timeSeconds as double?,
       isToCenter: isToCenter ?? this.isToCenter,
       passNumber: passNumber ?? this.passNumber,
       label: label ?? this.label,

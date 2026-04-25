@@ -278,7 +278,10 @@ class _ObservedAutoPainter extends CustomPainter {
       canvas.drawCircle(center, selected ? 12 : 9, fillPaint);
       canvas.drawCircle(center, selected ? 12 : 9, outlinePaint);
 
-      final timeLabel = '${i + 1}  ${point.timeSeconds.toStringAsFixed(2)}s';
+      final timeText = point.timeSeconds == null
+          ? ''
+          : '  ${point.timeSeconds!.toStringAsFixed(2)}s';
+      final timeLabel = '${i + 1}$timeText';
       final textPainter = TextPainter(
         text: TextSpan(
           text: timeLabel,

@@ -80,8 +80,16 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
   }
 
   double get _durationSeconds {
-    final lastWaypointTime = _timings.isEmpty ? 0.0 : _timings.last.timeSeconds;
-    final lastMarkerTime = _markers.isEmpty ? 0.0 : _markers.last.timeSeconds;
+    final waypointTimes = _timings
+        .map((timing) => timing.timeSeconds)
+        .whereType<double>()
+        .toList();
+    final markerTimes = _markers
+        .map((marker) => marker.timeSeconds)
+        .whereType<double>()
+        .toList();
+    final lastWaypointTime = waypointTimes.isEmpty ? 0.0 : waypointTimes.last;
+    final lastMarkerTime = markerTimes.isEmpty ? 0.0 : markerTimes.last;
     return max(lastWaypointTime, lastMarkerTime);
   }
 
@@ -105,17 +113,20 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
     );
   }
 
-  void _setWaypointTime(int index, double value) {
+  void _setWaypointTime(int index, double? value) {
     setState(() {
       _timings[index] = _timings[index].copyWith(timeSeconds: value);
-      _previewTime = _clampPreviewTime(value);
+      if (value != null) {
+        _previewTime = _clampPreviewTime(value);
+      }
     });
     _emitChanged();
   }
 
   void _setMarkerDetails(
     String markerId, {
-    required double timeSeconds,
+    required double? timeSeconds,
+    required String name,
     required bool isToCenter,
     required int? passNumber,
   }) {
@@ -125,41 +136,25 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
           if (marker.id == markerId)
             marker.copyWith(
               timeSeconds: timeSeconds,
+              note: name.trim(),
               isToCenter: isToCenter,
               passNumber: isToCenter ? passNumber : null,
             )
           else
             marker,
-      ]..sort((a, b) => a.timeSeconds.compareTo(b.timeSeconds));
-      _previewTime = _clampPreviewTime(timeSeconds);
+      ]..sort(_compareMarkerTimes);
+      if (timeSeconds != null) {
+        _previewTime = _clampPreviewTime(timeSeconds);
+      }
     });
     _emitChanged();
   }
 
   void _insertWaypointAt(Translation2d anchor) {
     setState(() {
-      if (_selectedWaypoint != null &&
-          _selectedWaypoint! >= 0 &&
-          _selectedWaypoint! < _path.waypoints.length - 1) {
-        _path.insertWaypointAfter(_selectedWaypoint!);
-        final insertedIndex = _selectedWaypoint! + 1;
-        _path.waypoints[insertedIndex].move(anchor.x, anchor.y);
-
-        final prevTime = _timings[_selectedWaypoint!].timeSeconds;
-        final nextTime = _timings[insertedIndex].timeSeconds;
-        _timings.insert(
-          insertedIndex,
-          ObservedWaypointTiming(
-            timeSeconds: (prevTime + nextTime) / 2,
-          ),
-        );
-        _selectedWaypoint = insertedIndex;
-      } else {
-        _path.addWaypoint(anchor);
-        final time = _timings.isEmpty ? 0.0 : _timings.last.timeSeconds + 1.0;
-        _timings.add(ObservedWaypointTiming(timeSeconds: time));
-        _selectedWaypoint = _path.waypoints.length - 1;
-      }
+      _path.addWaypoint(anchor);
+      _timings.add(const ObservedWaypointTiming());
+      _selectedWaypoint = _path.waypoints.length - 1;
 
       _path.generatePathPoints();
       _markers = ObservedAutoConverter.normalizedMarkers(
@@ -199,6 +194,83 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
     _emitChanged();
   }
 
+  void _straightenControlSegment(_WaypointControlHit hit) {
+    final index = hit.waypointIndex;
+    if (index < 0 || index >= _path.waypoints.length) {
+      return;
+    }
+
+    setState(() {
+      if (hit.side == _WaypointControlSide.prev && index > 0) {
+        _path.waypoints[index].prevControl = null;
+        _path.waypoints[index - 1].nextControl = null;
+      } else if (hit.side == _WaypointControlSide.next &&
+          index < _path.waypoints.length - 1) {
+        _path.waypoints[index].nextControl = null;
+        _path.waypoints[index + 1].prevControl = null;
+      }
+
+      _selectedWaypoint = index;
+      _selectedMarkerId = null;
+      _path.generatePathPoints();
+      _markers = ObservedAutoConverter.normalizedMarkers(
+        path: _path,
+        markers: _markers,
+      );
+      final time = _timings[index].timeSeconds;
+      if (time != null) {
+        _previewTime = time;
+      }
+    });
+    _emitChanged();
+  }
+
+  bool _restoreControlSegments(int index) {
+    if (index < 0 || index >= _path.waypoints.length) {
+      return false;
+    }
+
+    var restored = false;
+
+    setState(() {
+      final waypoint = _path.waypoints[index];
+      if (index > 0 && waypoint.prevControl == null) {
+        final previous = _path.waypoints[index - 1];
+        waypoint.prevControl =
+            waypoint.anchor.interpolate(previous.anchor, 1 / 3);
+        previous.nextControl ??=
+            previous.anchor.interpolate(waypoint.anchor, 1 / 3);
+        restored = true;
+      }
+
+      if (index < _path.waypoints.length - 1 && waypoint.nextControl == null) {
+        final next = _path.waypoints[index + 1];
+        waypoint.nextControl = waypoint.anchor.interpolate(next.anchor, 1 / 3);
+        next.prevControl ??= next.anchor.interpolate(waypoint.anchor, 1 / 3);
+        restored = true;
+      }
+
+      if (restored) {
+        _selectedWaypoint = index;
+        _selectedMarkerId = null;
+        _path.generatePathPoints();
+        _markers = ObservedAutoConverter.normalizedMarkers(
+          path: _path,
+          markers: _markers,
+        );
+        final time = _timings[index].timeSeconds;
+        if (time != null) {
+          _previewTime = time;
+        }
+      }
+    });
+
+    if (restored) {
+      _emitChanged();
+    }
+    return restored;
+  }
+
   void _deleteMarker(String markerId) {
     setState(() {
       _markers = _markers.where((marker) => marker.id != markerId).toList();
@@ -212,10 +284,9 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
 
   Future<void> _promptAddMarker(Translation2d fieldPoint) async {
     final relativePos = _nearestRelativePosOnPath(fieldPoint);
-    final defaultTime = _timeForRelativePos(relativePos);
     final result = await _showMarkerDialog(
       title: 'Add Path Timestamp',
-      initialValue: defaultTime,
+      initialValue: null,
     );
 
     if (result == null) {
@@ -233,32 +304,41 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
           position: pathPosition,
           waypointRelativePos: relativePos,
           timeSeconds: result.timeSeconds,
+          note: result.name,
           isToCenter: result.isToCenter,
           passNumber: result.isToCenter ? result.passNumber : null,
         ),
-      ]..sort((a, b) => a.timeSeconds.compareTo(b.timeSeconds));
+      ]..sort(_compareMarkerTimes);
       _selectedMarkerId = markerId;
       _selectedWaypoint = null;
-      _previewTime = result.timeSeconds;
+      if (result.timeSeconds != null) {
+        _previewTime = result.timeSeconds!;
+      }
     });
     _emitChanged();
   }
 
   Future<void> _editWaypointTime(int index) async {
-    final chosenTime = await _showTimeDialog(
+    final result = await _showTimeDialog(
       title: index == 0
           ? 'Edit Start Timestamp'
           : index == _path.waypoints.length - 1
               ? 'Edit End Timestamp'
               : 'Edit Waypoint Timestamp',
       initialValue: _timings[index].timeSeconds,
+      canDelete: _path.waypoints.length > 2,
     );
 
-    if (chosenTime == null) {
+    if (result == null) {
       return;
     }
 
-    _setWaypointTime(index, chosenTime);
+    switch (result.action) {
+      case _WaypointTimeDialogAction.save:
+        _setWaypointTime(index, result.timeSeconds);
+      case _WaypointTimeDialogAction.delete:
+        _deleteWaypoint(index);
+    }
   }
 
   Future<void> _editMarkerTime(String markerId) async {
@@ -266,31 +346,40 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
     final result = await _showMarkerDialog(
       title: 'Edit Path Timestamp',
       initialValue: marker.timeSeconds,
+      initialName: marker.note,
       initialIsToCenter: marker.isToCenter,
       initialPassNumber: marker.passNumber,
+      canDelete: true,
     );
 
     if (result == null) {
       return;
     }
 
-    _setMarkerDetails(
-      markerId,
-      timeSeconds: result.timeSeconds,
-      isToCenter: result.isToCenter,
-      passNumber: result.passNumber,
-    );
+    switch (result.action) {
+      case _MarkerDialogAction.save:
+        _setMarkerDetails(
+          markerId,
+          timeSeconds: result.timeSeconds,
+          name: result.name,
+          isToCenter: result.isToCenter,
+          passNumber: result.passNumber,
+        );
+      case _MarkerDialogAction.delete:
+        _deleteMarker(markerId);
+    }
   }
 
-  Future<double?> _showTimeDialog({
+  Future<_WaypointTimeDialogResult?> _showTimeDialog({
     required String title,
-    required double initialValue,
+    required double? initialValue,
+    required bool canDelete,
   }) async {
     final controller = TextEditingController(
-      text: initialValue.toStringAsFixed(2),
+      text: initialValue == null ? '' : initialValue.toStringAsFixed(2),
     );
 
-    return showDialog<double>(
+    return showDialog<_WaypointTimeDialogResult>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -301,26 +390,41 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: const InputDecoration(
               labelText: 'Timestamp (s)',
+              hintText: 'N/A',
               prefixIcon: Icon(Icons.timer_outlined),
             ),
             onSubmitted: (_) {
-              final value = double.tryParse(controller.text.trim());
-              if (value != null) {
-                Navigator.of(context).pop(value);
-              }
+              Navigator.of(context).pop(
+                _WaypointTimeDialogResult.save(
+                  _parseOptionalTime(controller.text),
+                ),
+              );
             },
           ),
           actions: [
+            TextButton.icon(
+              onPressed: canDelete
+                  ? () => Navigator.of(context).pop(
+                        const _WaypointTimeDialogResult.delete(),
+                      )
+                  : null,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete'),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+            ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () {
-                final value = double.tryParse(controller.text.trim());
-                if (value != null) {
-                  Navigator.of(context).pop(value);
-                }
+                Navigator.of(context).pop(
+                  _WaypointTimeDialogResult.save(
+                    _parseOptionalTime(controller.text),
+                  ),
+                );
               },
               child: const Text('Save'),
             ),
@@ -335,13 +439,16 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
 
   Future<_MarkerDialogResult?> _showMarkerDialog({
     required String title,
-    required double initialValue,
+    required double? initialValue,
+    String initialName = '',
     bool initialIsToCenter = false,
     int? initialPassNumber,
+    bool canDelete = false,
   }) async {
     final controller = TextEditingController(
-      text: initialValue.toStringAsFixed(2),
+      text: initialValue == null ? '' : initialValue.toStringAsFixed(2),
     );
+    final nameController = TextEditingController(text: initialName);
     var isToCenter = initialIsToCenter;
     var passNumber = initialPassNumber ?? 1;
 
@@ -362,7 +469,16 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
                         const TextInputType.numberWithOptions(decimal: true),
                     decoration: const InputDecoration(
                       labelText: 'Timestamp (s)',
+                      hintText: 'N/A',
                       prefixIcon: Icon(Icons.timer_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Name',
+                      prefixIcon: Icon(Icons.label_outline),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -402,22 +518,32 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
                 ],
               ),
               actions: [
+                TextButton.icon(
+                  onPressed: canDelete
+                      ? () => Navigator.of(context).pop(
+                            const _MarkerDialogResult.delete(),
+                          )
+                      : null,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
                   onPressed: () {
-                    final value = double.tryParse(controller.text.trim());
-                    if (value != null) {
-                      Navigator.of(context).pop(
-                        _MarkerDialogResult(
-                          timeSeconds: value,
-                          isToCenter: isToCenter,
-                          passNumber: isToCenter ? passNumber : null,
-                        ),
-                      );
-                    }
+                    Navigator.of(context).pop(
+                      _MarkerDialogResult(
+                        timeSeconds: _parseOptionalTime(controller.text),
+                        name: nameController.text.trim(),
+                        isToCenter: isToCenter,
+                        passNumber: isToCenter ? passNumber : null,
+                      ),
+                    );
                   },
                   child: const Text('Save'),
                 ),
@@ -428,13 +554,16 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
       },
     ).then((value) {
       controller.dispose();
+      nameController.dispose();
       return value;
     });
   }
 
   double _relativePosForPreviewTime() {
     final markersAtTime = _markers.where(
-      (marker) => (marker.timeSeconds - _previewTime).abs() < 1e-6,
+      (marker) =>
+          marker.timeSeconds != null &&
+          (marker.timeSeconds! - _previewTime).abs() < 1e-6,
     );
     if (markersAtTime.isNotEmpty) {
       return markersAtTime.first.waypointRelativePos ?? 0;
@@ -444,44 +573,34 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
       return 0;
     }
 
-    if (_previewTime <= _timings.first.timeSeconds) {
+    final timedTimings = [
+      for (int i = 0; i < _timings.length; i++)
+        if (_timings[i].timeSeconds != null)
+          (index: i, time: _timings[i].timeSeconds!),
+    ];
+    if (timedTimings.length < 2) {
       return 0;
     }
-    if (_previewTime >= _timings.last.timeSeconds) {
+
+    if (_previewTime <= timedTimings.first.time) {
+      return 0;
+    }
+    if (_previewTime >= timedTimings.last.time) {
       return (_path.waypoints.length - 1).toDouble();
     }
 
-    for (int i = 0; i < _timings.length - 1; i++) {
-      final start = _timings[i].timeSeconds;
-      final end = _timings[i + 1].timeSeconds;
+    for (int i = 0; i < timedTimings.length - 1; i++) {
+      final start = timedTimings[i].time;
+      final end = timedTimings[i + 1].time;
       if (_previewTime >= start && _previewTime <= end) {
         final duration = end - start;
         final t = duration <= 0 ? 0.0 : (_previewTime - start) / duration;
-        return i + t;
+        return timedTimings[i].index +
+            ((timedTimings[i + 1].index - timedTimings[i].index) * t);
       }
     }
 
     return (_path.waypoints.length - 1).toDouble();
-  }
-
-  double _timeForRelativePos(double relativePos) {
-    if (_timings.isEmpty) {
-      return 0;
-    }
-    if (_timings.length == 1) {
-      return _timings.first.timeSeconds;
-    }
-
-    final clamped = relativePos.clamp(0, _path.waypoints.length - 1).toDouble();
-    final index = clamped.floor();
-    if (index >= _timings.length - 1) {
-      return _timings.last.timeSeconds;
-    }
-
-    final t = clamped - index;
-    final start = _timings[index].timeSeconds;
-    final end = _timings[index + 1].timeSeconds;
-    return start + ((end - start) * t);
   }
 
   void _moveMarkerToFieldPosition(String markerId, Translation2d fieldPoint) {
@@ -498,14 +617,27 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
             )
           else
             marker,
-      ];
+      ]..sort(_compareMarkerTimes);
       for (final marker in _markers) {
-        if (marker.id == markerId) {
-          _previewTime = _clampPreviewTime(marker.timeSeconds);
+        if (marker.id == markerId && marker.timeSeconds != null) {
+          _previewTime = _clampPreviewTime(marker.timeSeconds!);
           break;
         }
       }
     });
+  }
+
+  static double? _parseOptionalTime(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : double.tryParse(trimmed);
+  }
+
+  static int _compareMarkerTimes(ObservedAutoPoint a, ObservedAutoPoint b) {
+    return _sortTime(a.timeSeconds).compareTo(_sortTime(b.timeSeconds));
+  }
+
+  static double _sortTime(double? timeSeconds) {
+    return timeSeconds ?? double.infinity;
   }
 
   double _nearestRelativePosOnPath(Translation2d fieldPoint) {
@@ -725,13 +857,15 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
                                     space,
                                   );
                                   if (markerId != null) {
+                                    final marker = _markers.firstWhere(
+                                      (marker) => marker.id == markerId,
+                                    );
                                     setState(() {
                                       _selectedMarkerId = markerId;
                                       _selectedWaypoint = null;
-                                      _previewTime = _markers
-                                          .firstWhere(
-                                              (marker) => marker.id == markerId)
-                                          .timeSeconds;
+                                      if (marker.timeSeconds != null) {
+                                        _previewTime = marker.timeSeconds!;
+                                      }
                                     });
                                     return;
                                   }
@@ -743,9 +877,11 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
                                   setState(() {
                                     _selectedWaypoint = waypoint;
                                     _selectedMarkerId = null;
-                                    if (waypoint != null) {
-                                      _previewTime =
-                                          _timings[waypoint].timeSeconds;
+                                    final time = waypoint == null
+                                        ? null
+                                        : _timings[waypoint].timeSeconds;
+                                    if (time != null) {
+                                      _previewTime = time;
                                     }
                                   });
                                 },
@@ -759,11 +895,23 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
                                     return;
                                   }
 
+                                  final controlHit = _hitTestWaypointControl(
+                                    details.localPosition,
+                                    space,
+                                  );
+                                  if (controlHit != null) {
+                                    _straightenControlSegment(controlHit);
+                                    return;
+                                  }
+
                                   final waypoint = _hitTestWaypoint(
                                     details.localPosition,
                                     space,
                                   );
                                   if (waypoint != null) {
+                                    if (_restoreControlSegments(waypoint)) {
+                                      return;
+                                    }
                                     await _editWaypointTime(waypoint);
                                     return;
                                   }
@@ -869,6 +1017,68 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
     return hitIndex;
   }
 
+  _WaypointControlHit? _hitTestWaypointControl(
+    Offset position,
+    _ObservedFieldSpace space,
+  ) {
+    _WaypointControlHit? hit;
+    double bestDistance = double.infinity;
+
+    for (int i = _path.waypoints.length - 1; i >= 0; i--) {
+      final waypoint = _path.waypoints[i];
+      final anchor = space.toCanvas(waypoint.anchor);
+      final anchorDistance = (position - anchor).distance;
+
+      if (waypoint.prevControl != null) {
+        final prev = space.toCanvas(waypoint.prevControl!);
+        final controlDistance = (position - prev).distance;
+        final lineDistance = anchorDistance > 18
+            ? _distanceToLineSegment(position, anchor, prev)
+            : double.infinity;
+        final distance = min(controlDistance, lineDistance);
+        if ((controlDistance <= 14 || lineDistance <= 6) &&
+            distance < bestDistance) {
+          hit = _WaypointControlHit(i, _WaypointControlSide.prev);
+          bestDistance = distance;
+        }
+      }
+
+      if (waypoint.nextControl != null) {
+        final next = space.toCanvas(waypoint.nextControl!);
+        final controlDistance = (position - next).distance;
+        final lineDistance = anchorDistance > 18
+            ? _distanceToLineSegment(position, anchor, next)
+            : double.infinity;
+        final distance = min(controlDistance, lineDistance);
+        if ((controlDistance <= 14 || lineDistance <= 6) &&
+            distance < bestDistance) {
+          hit = _WaypointControlHit(i, _WaypointControlSide.next);
+          bestDistance = distance;
+        }
+      }
+    }
+
+    return hit;
+  }
+
+  double _distanceToLineSegment(Offset point, Offset start, Offset end) {
+    final segment = end - start;
+    final lengthSquared = segment.distanceSquared;
+    if (lengthSquared == 0) {
+      return (point - start).distance;
+    }
+
+    final t = (((point.dx - start.dx) * segment.dx) +
+            ((point.dy - start.dy) * segment.dy)) /
+        lengthSquared;
+    final clampedT = t.clamp(0.0, 1.0).toDouble();
+    final closest = Offset(
+      start.dx + (segment.dx * clampedT),
+      start.dy + (segment.dy * clampedT),
+    );
+    return (point - closest).distance;
+  }
+
   String? _hitTestMarker(Offset position, _ObservedFieldSpace space) {
     String? hitId;
     double bestDistance = double.infinity;
@@ -883,6 +1093,15 @@ class _ScoutingPathplannerEditorState extends State<ScoutingPathplannerEditor> {
 
     return hitId;
   }
+}
+
+enum _WaypointControlSide { prev, next }
+
+class _WaypointControlHit {
+  final int waypointIndex;
+  final _WaypointControlSide side;
+
+  const _WaypointControlHit(this.waypointIndex, this.side);
 }
 
 class _ObservedFieldSpace {
@@ -1103,10 +1322,11 @@ class _ObservedPathPlannerPainter extends CustomPainter {
       );
 
       if (i < timings.length) {
+        final time = timings[i].timeSeconds;
         _paintLabel(
           canvas,
           Offset(anchor.dx + 14, anchor.dy - 28),
-          '${timings[i].timeSeconds.toStringAsFixed(2)}s',
+          time == null ? '' : '${time.toStringAsFixed(2)}s',
         );
       }
     }
@@ -1144,9 +1364,18 @@ class _ObservedPathPlannerPainter extends CustomPainter {
       _paintLabel(
         canvas,
         Offset(center.dx + 12, center.dy + 10),
-        '${marker.timeSeconds.toStringAsFixed(2)}s',
+        _markerLabel(marker),
       );
     }
+  }
+
+  String _markerLabel(ObservedAutoPoint marker) {
+    final name = marker.note.trim();
+    final time = marker.timeSeconds;
+    if (name.isEmpty) {
+      return time == null ? '' : '${time.toStringAsFixed(2)}s';
+    }
+    return time == null ? name : '$name ${time.toStringAsFixed(2)}s';
   }
 
   void _paintControlPoint(
@@ -1167,6 +1396,10 @@ class _ObservedPathPlannerPainter extends CustomPainter {
   }
 
   void _paintLabel(Canvas canvas, Offset position, String text) {
+    if (text.isEmpty) {
+      return;
+    }
+
     final textPainter = TextPainter(
       text: TextSpan(
         text: text,
@@ -1257,14 +1490,47 @@ class _ObservedPathPlannerPainter extends CustomPainter {
   }
 }
 
+enum _MarkerDialogAction { save, delete }
+
 class _MarkerDialogResult {
-  final double timeSeconds;
+  final _MarkerDialogAction action;
+  final double? timeSeconds;
+  final String name;
   final bool isToCenter;
   final int? passNumber;
 
   const _MarkerDialogResult({
     required this.timeSeconds,
+    this.name = '',
     required this.isToCenter,
     required this.passNumber,
+  }) : action = _MarkerDialogAction.save;
+
+  const _MarkerDialogResult.delete()
+      : action = _MarkerDialogAction.delete,
+        timeSeconds = null,
+        name = '',
+        isToCenter = false,
+        passNumber = null;
+}
+
+enum _WaypointTimeDialogAction { save, delete }
+
+class _WaypointTimeDialogResult {
+  final _WaypointTimeDialogAction action;
+  final double? timeSeconds;
+
+  const _WaypointTimeDialogResult._({
+    required this.action,
+    this.timeSeconds,
   });
+
+  const _WaypointTimeDialogResult.save(double? timeSeconds)
+      : this._(
+          action: _WaypointTimeDialogAction.save,
+          timeSeconds: timeSeconds,
+        );
+
+  const _WaypointTimeDialogResult.delete()
+      : this._(action: _WaypointTimeDialogAction.delete);
 }

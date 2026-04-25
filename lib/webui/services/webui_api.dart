@@ -80,6 +80,15 @@ class WebUiApi {
     return ObservedAuto.fromJson(json['auto'] as Map<String, dynamic>);
   }
 
+  Future<void> deleteAuto(String team, String storageId) async {
+    final response = await http.delete(
+      _uri(
+        '/api/teams/${Uri.encodeComponent(team)}/autos/${Uri.encodeComponent(storageId)}',
+      ),
+    );
+    _decode(response);
+  }
+
   Uri exportUri(ObservedAuto auto) {
     return _uri(
       '/api/teams/${Uri.encodeComponent(auto.team)}/autos/${Uri.encodeComponent(auto.storageId)}/export',
