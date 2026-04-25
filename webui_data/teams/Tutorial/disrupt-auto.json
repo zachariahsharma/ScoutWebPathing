@@ -1,20 +1,24 @@
 {
   "version": 3,
-  "storageId": "middle-auto",
+  "storageId": "disrupt-auto",
   "team": "Tutorial",
-  "name": "Middle Climb Auto",
+  "name": "Disrupt Auto",
   "autoType": "",
   "fieldId": "rebuilt",
-  "createdAt": "2026-04-25T01:38:14.696Z",
-  "updatedAt": "2026-04-25T03:48:49.708900Z",
+  "createdAt": "2026-04-25T03:49:12.859Z",
+  "updatedAt": "2026-04-25T03:51:52.922789Z",
   "points": [],
   "waypointTimings": [
     {
-      "timeSeconds": 20,
       "note": ""
     },
     {
-      "timeSeconds": 18.5,
+      "note": ""
+    },
+    {
+      "note": ""
+    },
+    {
       "note": ""
     }
   ],
@@ -23,25 +27,57 @@
     "waypoints": [
       {
         "anchor": {
-          "x": 3.7868653759904314,
-          "y": 3.9766938256839595
+          "x": 4.29351425598715,
+          "y": 7.464477858498832
         },
         "prevControl": null,
         "nextControl": {
-          "x": 4.786865375990432,
-          "y": 3.9766938256839595
+          "x": 5.29351425598715,
+          "y": 7.464477858498832
         },
         "isLocked": false,
         "linkedName": null
       },
       {
         "anchor": {
-          "x": 1.2783439228584241,
-          "y": 3.9936432949618776
+          "x": 8.773548572575935,
+          "y": 6.303162237149533
         },
         "prevControl": {
-          "x": 0.27834392285842413,
-          "y": 3.9936432949618776
+          "x": 8.947220265040889,
+          "y": 7.9390426036799076
+        },
+        "nextControl": {
+          "x": 8.599876880110982,
+          "y": 4.667281870619159
+        },
+        "isLocked": false,
+        "linkedName": null
+      },
+      {
+        "anchor": {
+          "x": 1.881398218457944,
+          "y": 6.777986273364486
+        },
+        "prevControl": {
+          "x": 3.6193568377628496,
+          "y": 8.558493629526865
+        },
+        "nextControl": {
+          "x": 0.14343959915303817,
+          "y": 4.997478917202107
+        },
+        "isLocked": false,
+        "linkedName": null
+      },
+      {
+        "anchor": {
+          "x": 1.8140155884929907,
+          "y": 5.043835517669392
+        },
+        "prevControl": {
+          "x": 0.9787275938230144,
+          "y": 5.020657217435749
         },
         "nextControl": null,
         "isLocked": false,
@@ -77,31 +113,15 @@
   "matches": [
     {
       "id": "match_1",
-      "matchNumber": "Match 1",
-      "label": "Match 1",
+      "matchNumber": "1",
+      "label": "",
       "waypointTimings": [
         {
-          "timeSeconds": 20,
           "note": ""
         },
         {
-          "timeSeconds": 18.5,
           "note": ""
-        }
-      ],
-      "markerTimings": [],
-      "passToCenterTimes": [
-        null,
-        null,
-        null,
-        null
-      ]
-    },
-    {
-      "id": "match_1777088928776000",
-      "matchNumber": "2",
-      "label": "",
-      "waypointTimings": [
+        },
         {
           "note": ""
         },
@@ -118,5 +138,5 @@
       ]
     }
   ],
-  "selectedMatchId": "match_1777088928776000"
+  "selectedMatchId": "match_1"
 }
